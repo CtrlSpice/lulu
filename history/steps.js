@@ -1,0 +1,40 @@
+// Lulu's history, one row per decision, oldest first. Add new rows at the end.
+// K = kept, X = rejected, P = just playing; Shot(...) uses a screenshot crop; ['tool', name, note] marks a new tool.
+const K = (f, l) => ({ f, l, s: 'kept' }), X = (f, l) => ({ f, l, s: 'cut' }), P = (f, l) => ({ f, l, s: 'play' });
+const Shot = (img, crop, l, s) => ({ img, crop, l, s });
+const V = '../versions/', C = '../checkpoints/', S = 'scratch/', VV = '../versions/views/';
+const ROWS = [
+  ['First renders', '64 px and friends', [Shot('shots/first-render-32-64.jpg', [358,138,658,438], 'first 64 px', 'cut'), Shot('shots/first-render-32-64.jpg', [22,138,322,438], 'first 32 px', 'cut'), Shot('shots/first-render-128.jpg', [22,218,322,518], 'first 128 px', 'cut')]],
+  ['Rework', '"ugly"', [X('h01-raptor.txt', 'raptor: "awful"'), Shot('shots/chibi.png', [0,0,302,302], 'chibi: "TOO CHIBI"', 'cut'), Shot('shots/first-design-yuan-ti.jpg', [22,138,322,438], 'yuan-ti', 'cut')]],
+  ['Lie it down', 'side view', [X('h02-sausage.txt', 'sausage'), X('h03-leaf-tail.txt', '"virus"')]],
+  ['Telescope', 'like the painting', [K('h05-telescope-gills.txt', '"body is better"'), X('h04-telescope.txt', 'dino again')]],
+  ['Head on', '', [K('h06-head-on.txt', 'head on, 64 px')]],
+  ['Game sprite', '32 px', [X('h07-first-sprite.txt', '"3 penises"'), X('h08-boxy-sprite.txt', 'no limbs, snack-mascot')]],
+  ['Palette', '9 → 5 colours', [K(S + 'sprite-5col.txt', '5 colours'), X(S + 'sprite-4col.txt', '4 colours'), X(S + 'p2.txt', 'Rosé Pine hexes: mush')]],
+  ['Mouth', '', [K(S + 'mouth-a.txt', 'long smile'), X(V + 'lulu-sprite-uwu-mouth.txt', 'uwu: "hate"'), X(S + 'mouth-b.txt', 'short'), X(S + 'mouth-c.txt', 'small w')]],
+  ['Eyes', 'spacing and colour', [K(S + 'eyes-2.txt', '2 px closer'), X(S + 'eyes-1.txt', '1 px closer'), K(S + 'eye-a-highlight-med.txt', 'grey-purple'), X(S + 'eye-b-dawn-text.txt', 'Dawn text'), X(S + 'eye-d-current-base.txt', 'black-black')]],
+  ['Head shape', 'triangle?', [K(S + 'head-b2.txt', 'jaw-wide'), X(S + 'head-a.txt', 'upside-down head'), X(S + 'head-b.txt', 'stripy gills'), X(V + 'lulu-sprite-block-head.txt', 'blocky')]],
+  ['Body', 'two dumplings', [K('../feet/a-separate.txt', 'Pixar mom bod'), X(S + 'dumplings.txt', 'ledge arms'), X('../body/two-dumplings.txt', 'nub arms'), X('../feet/b-toes.txt', 'toes')]],
+  ['Round eyes?', '', [X('../eyes/round-4x4.txt', 'round'), X('../eyes/oval-3x4.txt', 'star')]],
+  ['Chin', '', [K('../chin/corner-shadow.txt', 'corner shadow'), X(V + 'lulu-sprite-beard.txt', 'beard'), X('../chin/no-shadow.txt', 'none')]],
+  ['Forehead', '', [K('../forehead/thin-rim.txt', 'thin rim'), X('../forehead/thick-rim.txt', 'thick rim')]],
+  ['Gills, part 1', 'the sausage era', [X(V + 'lulu-sprite-sausage-gills.txt', 'Predator at a hot dog stand'), X('../gills/together.txt', 'together'), X('../gills/styles/a-feather-pink.txt', 'feathers'), X('../gills/styles/b-feather-dark-stem.txt', 'twigs'), X('../gills/styles/c-two-tone-frill.txt', 'whiskers'), X('../gills/styles/d-leaf-tufts.txt', 'bows'), X('../gills/styles/e-leaf-tufts-flat.txt', 'flames'), K('../gills/lines/f-lines-45.txt', 'your lines'), X('../gills/lines/g-lines-fanned.txt', 'fanned')]],
+  ['tool', "Checkpoints", "From here every accepted Lulu gets a numbered save point you can go back to."],
+  ['Gills, part 2', 'heart with an extra bump', [X('../gills/lobes/h-scallop.txt', 'block'), X('../gills/lobes/i-clover.txt', 'block II'), X('../gills/lobes/k-heart-round.txt', 'blob'), K('../gills/lobes/l-fan-up.txt', 'bump fan'), X('../gills/tufts/n-tuft-small.txt', '"ears"'), X('../gills/tufts/p-tuft-smaller.txt', 'ears II'), K('../gills/petals/q-petals.txt', 'petals!'), X('../gills/petals/r-petals-wide.txt', 'chunky')]],
+  ['Depth', '', [K('../depth/gill-shade-2-mid.txt', 'pink depth'), X('../depth/b-gill-depth.txt', '"too brown"'), X('../depth/a-body-sides.txt', 'body sides'), X('../depth/gill-shade-1-light.txt', 'too light'), X('../depth/gill-shade-3-deep.txt', 'too deep')]],
+  ['Eyes, again', '', [K('../experiments/outline-eyes-dawn-base.txt', 'outline eyes'), X('../experiments/outline-eyes-rose-pine-text.txt', 'lavender shine')]],
+  ['Smile', 'wider, then uwu after all', [K('../smile/wider-2px.txt', 'wide'), X('../smile/wider-1px.txt', 'less wide'), X('../experiments/wide-smile-uwu.txt', 'uwu 2'), K('../experiments/wide-smile-uwu-4.txt', 'uwu 4')]],
+  ['Eye shine', 'Lulu range', ['01-current-top-left','02-top-right','03-mirrored-outward','04-mirrored-inward','05-bottom-left','06-bottom-mirrored','07-diagonal-two','08-diagonal-mirrored','09-top-bar','10-middle','11-up-and-down','12-none'].map((n, i) => P('../experiments/eye-shine/' + n + '.txt', n.slice(3).replace(/-/g, ' ')))],
+  ['tool', "Pixel annotator", "You start marking pixels yourself instead of Claude guessing. First job: dimples."],
+  ['Dimples', 'then freckles, then dimples', [K('../dimples/marked-2.txt', 'your dimples'), X('../dimples/a-below.txt', 'below'), X('../dimples/b-above.txt', 'above'), X('../dimples/c-beside-2px.txt', 'beside'), X('../dimples/d-above-spaced.txt', 'spaced'), X('../dimples/marked.txt', 'yours, take 1')]],
+  ['Freckles', '', [K('../freckles/marked-4.txt', 'your freckles'), X('../freckles/a-sprinkle.txt', 'sprinkle'), X('../freckles/b-arc.txt', 'arc'), X('../freckles/c-sprinkle-pink.txt', 'pink'), X('../freckles/d-triangle-6.txt', 'triangle'), X('../freckles/e-triangle-8.txt', 'triangle 8'), X('../freckles/g-triangle-3.txt', 'too noisy'), X('../freckles/marked.txt', 'yours, 1'), X('../freckles/marked-2.txt', 'yours, 2'), X('../freckles/marked-3.txt', 'yours, 3')]],
+  ['tool', "Annotator gets colours", "Paint with Lulu's own palette, with an actual-size preview."],
+  ['Arms', '', [K('../arms/drawn/rest.txt', 'your line'), P('../arms/drawn/wave.txt', 'wave'), P('../arms/drawn/point.txt', 'point'), X('../arms/a-rest.txt', 'seams'), X('../arms/c-rest-stub-out.txt', 'separate'), X('../arms/crease/rest.txt', 'gingerbread'), X('../arms/high/rest.txt', 'no neck')]],
+  ['tool', "Turnaround editor", "Front, side and back side by side, with rows lined up for a voxel Lulu."],
+  ['Side view', 'turnaround', [Shot('shots/first-side-draft.jpg', [169,36,327,194], 'weird flat face', 'cut'), K(VV + 'side-muzzle-accepted.txt', 'muzzle'), X(VV + 'side-dip-rejected.txt', 'dip: "hate"'), X(VV + 'side-join-rejected.txt', 'join: undo'), X('../head/shallower-3.txt', 'shallower'), X(VV + 'side-new-nose-rejected.txt', 'new nose')]],
+  ['tool', "Clearance guides", "Head, gill, face and freckle guides drawn over the side view."],
+  ['Side gills', '', [X(VV + 'side-full-petals.txt', 'full petals'), K('../gills/side/f-filled.txt', 'folded heart'), X('../gills/side/root-col-13-row-12.txt', 'low'), K('../gills/side/far-b.txt', 'far gill'), X('../gills/side/far-c.txt', '"geometry wrong"')]],
+  ['Side arm', '', [K(VV + 'side-arm-yours.txt', 'yours'), X('../arms/side-arm.txt', 'pocket'), X('../arms/side-arm-soft-back.txt', 'pocket II'), X('../arms/side-arm-forward-more.txt', '"too penis"')]],
+  ['Gill height', '', [K('../experiments/low-gills/side-down-1.txt', 'ear height'), P('../experiments/low-gills/front.txt', 'neck gills'), X('../experiments/low-gills/side-down-4.txt', 'down 4')]],
+  ['Today', 'checkpoint 20', [K(C + '20-freckle-fix/front.txt', 'front'), K(C + '20-freckle-fix/side.txt', 'side'), K(C + '20-freckle-fix/back.txt', 'back')]],
+];

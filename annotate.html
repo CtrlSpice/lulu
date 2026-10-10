@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lulu Annotator</title>
+<style>
+  :root { --base: #191724; --surface: #1f1d2e; --overlay: #26233a; --muted: #6e6a86; --text: #e0def4; --foam: #9ccfd8; --rose: #ebbcba; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px; background: var(--base); color: var(--text); font: 14px/1.4 ui-monospace, Menlo, monospace; }
+  h1 { font-size: 16px; margin: 0 0 4px; color: var(--rose); }
+  p { margin: 0 0 12px; color: var(--muted); }
+  .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  canvas { image-rendering: pixelated; border-radius: 4px; max-width: 100%; }
+  #c { cursor: crosshair; }
+  .panel { background: var(--surface); border: 1px solid var(--overlay); border-radius: 8px; padding: 12px; min-width: 240px; max-width: 100%; }
+  .panel h2 { font-size: 13px; margin: 12px 0 6px; color: var(--muted); font-weight: normal; }
+  .panel h2:first-child { margin-top: 0; }
+  button { font: inherit; color: var(--text); background: var(--overlay); border: 1px solid var(--muted); border-radius: 4px; padding: 4px 10px; cursor: pointer; margin: 0 6px 6px 0; }
+  .tools { display: flex; flex-direction: column; gap: 4px; }
+  .tool { display: flex; align-items: center; gap: 8px; text-align: left; margin: 0; width: 100%; }
+  .tool.on { border-color: var(--foam); box-shadow: 0 0 0 1px var(--foam); }
+  .sw { width: 18px; height: 18px; border-radius: 3px; border: 1px solid #0008; flex: none; }
+  .sw.erase { background: repeating-conic-gradient(#888 0 25%, #ccc 0 50%) 0 0 / 8px 8px; }
+  .sw.mark { background: transparent; border: 2px solid #00e5ff; }
+  #list { white-space: pre-wrap; color: var(--foam); font-size: 12px; }
+  .previews { display: flex; gap: 10px; align-items: flex-end; }
+  .previews canvas { background: var(--base); }
+</style>
+</head>
+<body>
+<h1>Lulu annotator</h1>
+<p>Pick a colour and click or drag to paint pixels, or use Mark to point at pixels without changing them. Claude reads the result from this page.</p>
+<div class="wrap">
+  <canvas id="c" width="544" height="544"></canvas>
+  <div class="panel">
+    <h2>Tool</h2>
+    <div class="tools" id="tools"></div>
+    <h2>Actual size</h2>
+    <div class="previews"><canvas id="p1" width="32" height="32"></canvas><canvas id="p2" width="32" height="32" style="width:64px;height:64px"></canvas><canvas id="p4" width="32" height="32" style="width:128px;height:128px"></canvas></div>
+    <h2>Page</h2>
+    <button id="reset">Undo all changes</button>
+    <button id="bg">Light background</button>
+    <h2>Changed or marked pixels (column, row)</h2>
+    <div id="list">none</div>
+  </div>
+</div>
+<script>
+const SCALE = 17, N = 32;
+const canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+const NAMES = { o: 'outline', s: 'skin shadow', b: 'skin', g: 'gill', G: 'gill shadow', e: 'eye', w: 'eye shine' };
+let original = [], palette = {}, light = false, tool = 'mark', painting = false;
+window.grid = [];   // current pixel rows, including painted changes
+window.marks = [];  // pixels marked with the Mark tool
+
+const changes = () => {
+  const out = [];
+  window.grid.forEach((row, y) => row.forEach((ch, x) => { if (ch !== original[y][x]) out.push([x, y, ch]); }));
+  return out;
+};
+window.changes = changes;
+
+const drawPreview = id => {
+  const c = document.getElementById(id), p = c.getContext('2d');
+  p.clearRect(0, 0, N, N);
+  p.fillStyle = light ? '#f2e9e1' : '#191724'; p.fillRect(0, 0, N, N);
+  window.grid.forEach((row, y) => row.forEach((ch, x) => { if (ch !== '.') { p.fillStyle = palette[ch]; p.fillRect(x, y, 1, 1); } }));
+};
+
+const draw = () => {
+  ctx.fillStyle = light ? '#f2e9e1' : '#191724';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  window.grid.forEach((row, y) => row.forEach((ch, x) => {
+    if (ch === '.') return;
+    ctx.fillStyle = palette[ch];
+    ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
+  }));
+  ctx.strokeStyle = light ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= N; i++) {
+    ctx.beginPath(); ctx.moveTo(i * SCALE + 0.5, 0); ctx.lineTo(i * SCALE + 0.5, N * SCALE); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * SCALE + 0.5); ctx.lineTo(N * SCALE, i * SCALE + 0.5); ctx.stroke();
+  }
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 3;
+  for (const [x, y] of window.marks) ctx.strokeRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4);
+  ['p1', 'p2', 'p4'].forEach(drawPreview);
+  const lines = [
+    ...changes().map(([x, y, ch]) => `(${x}, ${y}) → ${ch === '.' ? 'empty' : NAMES[ch]}`),
+    ...window.marks.map(([x, y]) => `(${x}, ${y}) marked`),
+  ];
+  document.getElementById('list').textContent = lines.length ? lines.join('\n') : 'none';
+};
+
+const cellAt = e => {
+  const r = canvas.getBoundingClientRect();
+  return [Math.floor((e.clientX - r.left) / r.width * N), Math.floor((e.clientY - r.top) / r.height * N)];
+};
+const apply = ([x, y], toggle) => {
+  if (x < 0 || y < 0 || x >= N || y >= N) return;
+  if (tool === 'mark') {
+    if (!toggle) return;
+    const i = window.marks.findIndex(([mx, my]) => mx === x && my === y);
+    if (i >= 0) window.marks.splice(i, 1); else window.marks.push([x, y]);
+  } else {
+    window.grid[y][x] = tool;
+  }
+  draw();
+};
+canvas.addEventListener('pointerdown', e => { painting = true; canvas.setPointerCapture(e.pointerId); apply(cellAt(e), true); });
+canvas.addEventListener('pointermove', e => { if (painting && tool !== 'mark') apply(cellAt(e), false); });
+canvas.addEventListener('pointerup', () => { painting = false; });
+
+const toolsEl = document.getElementById('tools');
+const setTool = t => { tool = t; toolsEl.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.t === t)); };
+const addTool = (t, label, swClass, colour) => {
+  const b = document.createElement('button'); b.className = 'tool'; b.dataset.t = t;
+  const sw = document.createElement('span'); sw.className = 'sw ' + swClass; if (colour) sw.style.background = colour;
+  b.append(sw, label); b.onclick = () => setTool(t); toolsEl.appendChild(b);
+};
+
+document.getElementById('reset').onclick = () => { window.grid = original.map(r => [...r]); window.marks = []; draw(); };
+document.getElementById('bg').onclick = e => { light = !light; e.target.textContent = light ? 'Dark background' : 'Light background'; draw(); };
+
+fetch(new URLSearchParams(location.search).get('file') || 'lulu-sprite.txt', { cache: 'no-store' }).then(r => r.text()).then(text => {
+  for (const line of text.split('\n').filter(Boolean)) {
+    const m = line.match(/^(\S)=(#[0-9a-fA-F]{6})$/);
+    if (m) palette[m[1]] = m[2]; else original.push(line.split(''));
+  }
+  window.grid = original.map(r => [...r]);
+  addTool('mark', 'Mark (no colour)', 'mark');
+  for (const [k, name] of Object.entries(NAMES)) if (palette[k]) addTool(k, `${name} ${palette[k]}`, '', palette[k]);
+  addTool('.', 'Erase (empty)', 'erase');
+  setTool('mark');
+  draw();
+});
+</script>
+</body>
+</html>

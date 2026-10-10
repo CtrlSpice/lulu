@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lulu, Warts and All</title>
+<style>
+  :root { --bg: #191724; --panel: #1f1d2e; --line: #6e6a86; --text: #e0def4; --muted: #908caa; --kept: #9ccfd8; --cut: #eb6f92; --play: #f6c177; --tile: #26233a; }
+  :root[data-bg="moon"] { --bg: #232136; --panel: #2a273f; --tile: #393552; }
+  :root[data-bg="dawn"] { --bg: #f2e9e1; --panel: #fffaf3; --line: #9893a5; --text: #575279; --muted: #797593; --kept: #286983; --cut: #b4637a; --play: #ea9d34; --tile: #faf4ed; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px 40px; background: var(--bg); color: var(--text); font: 13px/1.35 ui-monospace, Menlo, monospace; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 12px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+  .key { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .graph { position: relative; padding-left: 26px; }
+  .graph::before { content: ""; position: absolute; left: 10px; top: 8px; bottom: 8px; width: 2px; background: var(--kept); border-radius: 1px; }
+  .row { position: relative; margin-bottom: 18px; }
+  .row::before { content: ""; position: absolute; left: -21px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--kept); }
+  .tool { position: relative; margin: 4px 0 18px; padding: 6px 10px; border: 1px solid var(--play); border-radius: 6px; color: var(--text); background: var(--panel); max-width: 34rem; }
+  .tool::before { content: ""; position: absolute; left: -22px; top: 9px; width: 10px; height: 10px; background: var(--play); transform: rotate(45deg); }
+  .tool b { color: var(--play); }
+  .row h2 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  .row h2 span { color: var(--muted); font-weight: normal; }
+  .nodes { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; position: relative; }
+  .node { width: 96px; text-align: center; position: relative; }
+  .node canvas, .node .lost { width: 96px; height: 96px; image-rendering: pixelated; border-radius: 6px; background: var(--tile); display: block; border: 2px solid transparent; }
+  .node.kept canvas { border-color: var(--kept); }
+  .node.cut canvas { opacity: 0.8; border-color: var(--cut); border-style: dashed; }
+  .node.play canvas { border-color: var(--play); border-style: dotted; }
+  .node .lost { border: 2px dashed var(--line); display: grid; place-items: center; color: var(--muted); font-size: 11px; padding: 6px; }
+  .node .badge { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; font-size: 11px; line-height: 18px; color: var(--bg); font-weight: 700; }
+  .kept .badge { background: var(--kept); } .cut .badge { background: var(--cut); } .play .badge { background: var(--play); }
+  .node .l { margin-top: 3px; font-size: 10.5px; color: var(--muted); }
+  .kept .l { color: var(--text); }
+</style>
+</head>
+<body>
+<h1>Lulu, warts and all</h1>
+<p class="sub">Every step, every side quest, every "NO". The blue line is the way through; each row is one decision.</p>
+<div class="bar">
+  <span class="key"><span class="dot" style="background:var(--kept)"></span>kept</span>
+  <span class="key"><span class="dot" style="background:var(--cut)"></span>rejected</span>
+  <span class="key"><span class="dot" style="background:var(--play)"></span>just playing</span>
+  <span class="key"><span class="dot" style="background:var(--play);border-radius:2px;transform:rotate(45deg)"></span>new tool</span>
+  <button data-bg="rose-pine">Rosé Pine</button><button data-bg="moon">Moon</button><button data-bg="dawn">Dawn</button>
+</div>
+<div class="graph" id="graph"></div>
+<script src="steps.js"></script>
+<script>
+// k = kept, x = rejected, p = experiment just to see, lost = never saved
+
+
+const parse = t => { const p = {}, rows = []; for (const l of t.split('\n')) { const m = l.match(/^(\S)=(#[0-9a-fA-F]{6})$/); if (m) p[m[1]] = m[2]; else if (l.length) rows.push(l); } return { p, rows }; };
+const tileBg = () => getComputedStyle(document.documentElement).getPropertyValue('--tile').trim();
+const drawGrid = (c, { p, rows }) => { const n = Math.max(rows.length, ...rows.map(r => r.length)); c.width = c.height = n; const x = c.getContext('2d'); x.fillStyle = tileBg(); x.fillRect(0, 0, n, n); rows.forEach((r, y) => [...r].forEach((ch, i) => { if (ch !== '.' && p[ch]) { x.fillStyle = p[ch]; x.fillRect(i, y, 1, 1); } })); };
+const drawShot = (c, node) => { const [x0, y0, x1, y1] = node.crop; c.width = c.height = 192; const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(node.loaded, x0, y0, x1 - x0, y1 - y0, 0, 0, 192, 192); };
+const tiles = [];
+const graph = document.getElementById('graph');
+for (const [title, sub, nodes] of ROWS) {
+  if (title === 'tool') { const t = document.createElement('div'); t.className = 'tool'; t.innerHTML = `<b>${sub}</b> · ${nodes}`; graph.append(t); continue; }
+  const row = document.createElement('div'); row.className = 'row';
+  row.innerHTML = `<h2>${title} <span>${sub}</span></h2>`;
+  const box = document.createElement('div'); box.className = 'nodes';
+  for (const n of nodes) {
+    const el = document.createElement('div'); el.className = 'node ' + n.s;
+    const badge = { kept: '✓', cut: '✕', play: '?' }[n.s];
+    const c = document.createElement('canvas');
+    el.append(c); el.insertAdjacentHTML('beforeend', `<span class="badge">${badge}</span><div class="l">${n.l}</div>`);
+    box.append(el);
+    tiles.push([c, n]);
+  }
+  row.append(box); graph.append(row);
+}
+const redraw = () => tiles.forEach(([c, n]) => n.grid ? drawGrid(c, n.grid) : n.loaded && drawShot(c, n));
+for (const [c, n] of tiles) {
+  const E = window.EMBED;
+  if (n.img) { const im = new Image(); im.onload = () => { n.loaded = im; drawShot(c, n); }; im.src = E ? E.shots[n.img] : n.img; }
+  else if (E) { n.grid = parse(E.grids[n.f]); drawGrid(c, n.grid); }
+  else fetch(n.f, { cache: 'no-store' }).then(r => r.ok ? r.text() : Promise.reject(n.f)).then(t => { n.grid = parse(t); drawGrid(c, n.grid); }).catch(f => console.warn('missing', f));
+}
+document.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => { if (b.dataset.bg === 'rose-pine') delete document.documentElement.dataset.bg; else document.documentElement.dataset.bg = b.dataset.bg; redraw(); });
+</script>
+</body>
+</html>

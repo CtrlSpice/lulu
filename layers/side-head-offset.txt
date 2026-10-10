@@ -1,0 +1,1 @@
+The side head was trimmed 2 px at the back and then moved 2 px back, so the back of the head is where it was when the gill layer was saved. Put layers/side-gill.txt back with no shift.

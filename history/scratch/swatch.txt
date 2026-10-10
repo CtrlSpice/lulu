@@ -1,0 +1,5 @@
+o=#4a2540
+s=#c98a96
+b=#f2cfcb
+g=#eb6f92
+osbg

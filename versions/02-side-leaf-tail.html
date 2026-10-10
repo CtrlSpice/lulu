@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lulu Pixel Lab</title>
+<style>
+  :root { --base: #191724; --surface: #1f1d2e; --overlay: #26233a; --muted: #6e6a86; --text: #e0def4; --rose: #ebbcba; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px; background: var(--base); color: var(--text); font: 14px/1.4 ui-monospace, Menlo, monospace; }
+  h1 { font-size: 18px; margin: 0 0 4px; color: var(--rose); }
+  p.note { margin: 0 0 20px; color: var(--muted); }
+  .controls { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+  .grid { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .card { background: var(--surface); border: 1px solid var(--overlay); border-radius: 8px; padding: 12px; max-width: 100%; }
+  .card h2 { font-size: 14px; margin: 0 0 8px; }
+  .stage { background: var(--overlay); display: grid; place-items: center; border-radius: 4px; width: 384px; height: 384px; max-width: 100%; }
+  .stage.light, .light .stage-mini { background: #faf4ed; }
+  canvas { image-rendering: pixelated; display: block; }
+  #big { width: 384px; height: 384px; max-width: 100%; }
+  .row { display: flex; gap: 8px; align-items: flex-end; margin-top: 8px; flex-wrap: wrap; }
+  .frames canvas { border: 1px dashed var(--muted); width: 128px; height: 128px; }
+  button, label { font: inherit; color: var(--text); }
+  button { background: var(--overlay); border: 1px solid var(--muted); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  .palette { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .swatch { width: 20px; height: 20px; border-radius: 3px; border: 1px solid #0006; }
+  .variant { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px; }
+  .variant canvas { width: 192px; height: 192px; background: var(--overlay); }
+  .variant canvas.light { background: #faf4ed; }
+  .variant.on { border-color: var(--rose); }
+  #variants { margin-bottom: 20px; }
+  img.ref { width: 240px; max-width: 100%; display: block; }
+</style>
+</head>
+<body>
+<h1>Lulu pixel lab</h1>
+<p class="note">64 × 64. Side view axolotl: long low body, four legs, finned tail.</p>
+
+
+<div class="controls">
+  <label><input type="checkbox" id="light"> light background</label>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2 id="which">idle</h2>
+    <div class="stage" id="stage"><canvas id="big"></canvas></div>
+    <div class="row"><span>1×</span><canvas id="one"></canvas><span>2×</span><canvas id="two" style="width:128px;height:128px"></canvas>
+</div>
+  </div>
+  <div class="card">
+    <h2>reference</h2>
+    <img class="ref" src="reference.png" alt="the original painted Lulu">
+    <div class="palette" id="palette"></div>
+  </div>
+</div>
+
+<script>
+const SIZE = 64;
+const FRAMES = 1;   // stills only until the design is approved
+
+// ---------- palette: 8 colours ----------
+const C = {
+  outline:   '#5e3249',
+  shadow:    '#c48f98',
+  base:      '#ebbcba',
+  highlight: '#f6e0da',
+  gill:      '#eb6f92',
+  gillFar:   '#b4476c',
+  eye:       '#191724',
+  glint:     '#f6e0da',
+};
+
+// ---------- signed distance helpers (pure; units are pixels) ----------
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+const mul = (a, s) => [a[0] * s, a[1] * s];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1];
+const len = a => Math.hypot(a[0], a[1]);
+const norm = a => mul(a, 1 / (len(a) || 1));
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const rotAround = (p, o, ang) => {
+  const s = Math.sin(ang), c = Math.cos(ang), d = sub(p, o);
+  return [o[0] + d[0] * c - d[1] * s, o[1] + d[0] * s + d[1] * c];
+};
+
+// tapered capsule from a (radius ra) to b (radius rb)
+const capsule = (a, b, ra, rb) => p => {
+  const pa = sub(p, a), ba = sub(b, a);
+  const h = clamp(dot(pa, ba) / dot(ba, ba), 0, 1);
+  return len(sub(pa, mul(ba, h))) - (ra + (rb - ra) * h);
+};
+// chain of tapered capsules through points with radii
+const chain = (pts, radii) => {
+  const segs = pts.slice(1).map((b, i) => capsule(pts[i], b, radii[i], radii[i + 1]));
+  return p => Math.min(...segs.map(s => s(p)));
+};
+const ellipse = (c, rx, ry) => p => {
+  const d = sub(p, c);
+  return (Math.hypot(d[0] / rx, d[1] / ry) - 1) * Math.min(rx, ry);
+};
+const smin = (k, ...fs) => p => fs.map(f => f(p)).reduce((a, b) => {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - h * h * k / 4;
+});
+const union = (...fs) => p => Math.min(...fs.map(f => f(p)));
+
+// ---------- the model: a real axolotl, side view, facing right ----------
+const VARIANTS = { SIDE: { label: 'axolotl, side view' } };
+
+function lulu() {
+  // body: big blunt head, narrower neck, rounded belly, tall leaf-shaped tail fin
+  const head = smin(4, ellipse([46, 31], 12, 9.5), ellipse([50, 35], 9, 6));
+  const trunk = capsule([27, 38], [36, 36], 6.8, 5.5);
+  const tailCore = chain([[27, 38], [15, 38.5], [2, 38]], [6, 3, 0.6]);
+  const finTop = chain([[31, 31.5], [20, 30], [9, 32.5], [1, 38]], [0.8, 2.2, 2, 0.5]);
+  const finBottom = chain([[20, 44], [10, 42.5], [1, 38]], [1, 1.6, 0.5]);
+  const finFill = ellipse([15, 37], 11, 5);
+  const tail = smin(3, tailCore, finTop, finBottom, finFill);
+  const leg = (hip, knee, foot) => union(
+    chain([hip, knee, foot], [2.8, 2.2, 1.8]),
+    capsule(foot, add(foot, [3, 0.5]), 0.8, 0.6),
+    capsule(foot, add(foot, [1, 2]), 0.8, 0.6),
+    capsule(foot, add(foot, [-1.5, 1.5]), 0.8, 0.6));
+  const nearLegs = union(leg([38, 41], [41, 45], [42, 48.5]), leg([25, 42], [22, 45.5], [21, 48.5]));
+  const body = union(smin(3, head, trunk, tail), smin(2.5, trunk, nearLegs), smin(2, head, nearLegs));
+
+  // far side legs, behind the body
+  const far = union(leg([35, 41], [36, 45], [35, 48.5]), leg([21, 41], [17, 44.5], [15, 48]));
+
+  // gills: tapered lobes with bumps along the upper edge
+  const lobe = (root, tip) => {
+    const dir = norm(sub(tip, root)), n = [dir[1], -dir[0]];
+    const length = len(sub(tip, root));
+    const bumps = [0.4, 0.6, 0.8].map(s => {
+      const r = 2.4 + (1.2 - 2.4) * s;
+      return ellipse(add(add(root, mul(dir, s * length)), mul(n, r + 0.3)), 1, 1);
+    });
+    return union(capsule(root, tip, 2.4, 1.2), ...bumps);
+  };
+  const gills = union(lobe([37, 25], [31, 11]), lobe([35, 30], [22, 24]), lobe([37, 35], [26, 43]));
+  const farGills = union(lobe([40, 24], [39, 10]), lobe([38, 26], [27, 15]));
+
+  const eyes = ellipse([51, 28.5], 1.9, 2.2);
+  const glints = ellipse([50.5, 27.7], 0.55, 0.55);
+  const mouth = chain([[57.5, 34], [52, 36], [46, 34.5]], [0.55, 0.55, 0.55]);
+
+  return { body, head, far, gills, farGills, eyes, glints, mouth };
+}
+
+// ---------- rasteriser (pure: model -> array of colours) ----------
+const LIGHT = norm([-0.45, -0.9]);
+function rasterise(m) {
+  const at = (i, j) => [i + 0.5, j + 0.5];
+  // layer id per pixel, front to back
+  const layer = p => {
+    if (m.eyes(p) <= 0) return m.glints(p) <= 0 ? 'glint' : 'eye';
+    if (m.mouth(p) <= 0 && m.head(p) <= -0.5) return 'mouth';
+    if (m.gills(p) <= 0) return 'gill';
+    if (m.body(p) <= 0) return 'body';
+    if (m.far(p) <= 0) return 'far';
+    if (m.farGills(p) <= 0) return 'farGill';
+    return null;
+  };
+  const ids = [];
+  for (let j = 0; j < SIZE; j++) for (let i = 0; i < SIZE; i++) ids.push(layer(at(i, j)));
+  const id = (i, j) => (i < 0 || j < 0 || i >= SIZE || j >= SIZE) ? null : ids[j * SIZE + i];
+  const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const solid = new Set(['body', 'eye', 'glint', 'mouth']);
+  const tone = (sdf, p) =>
+    sdf(add(p, mul(LIGHT, 2.2))) > 0 ? C.highlight : sdf(sub(p, mul(LIGHT, 3))) > 0 ? C.shadow : C.base;
+
+  return ids.map((l, k) => {
+    if (!l) return null;
+    const i = k % SIZE, j = Math.floor(k / SIZE), p = at(i, j);
+    const nbrs = N4.map(([di, dj]) => id(i + di, j + dj));
+    if (l === 'gill') return nbrs.some(n => n !== 'gill') ? C.gillFar : C.gill;
+    if (l === 'farGill') return C.gillFar;
+    if (l === 'far') return nbrs.some(n => n !== 'far') ? C.outline : C.shadow;
+    if (nbrs.some(n => !solid.has(n))) return C.outline;                         // silhouette outline
+    if (l !== 'body') return C[l];
+    return tone(m.body, p);
+  });
+}
+
+// ---------- page (side effects at the edge) ----------
+const sheets = Object.fromEntries(Object.entries(VARIANTS).map(([k, v]) =>
+  [k, Array.from({ length: FRAMES }, (_, f) => rasterise(lulu()))]));
+let current = 'SIDE';
+
+function paint(canvas, pixels, ox = 0) {
+  const ctx = canvas.getContext('2d');
+  pixels.forEach((c, k) => { if (c) { ctx.fillStyle = c; ctx.fillRect(ox + k % SIZE, Math.floor(k / SIZE), 1, 1); } });
+}
+const fresh = (canvas, w = SIZE) => { canvas.width = w; canvas.height = SIZE; return canvas; };
+
+const big = document.getElementById('big'), one = document.getElementById('one'), two = document.getElementById('two');
+Object.values(C).forEach(c => { const s = document.createElement('span'); s.className = 'swatch'; s.style.background = c; s.title = c; document.getElementById('palette').appendChild(s); });
+
+function render() {
+  document.getElementById('which').textContent = VARIANTS[current].label;
+  for (const c of [big, one, two]) paint(fresh(c), sheets[current][0]);
+}
+document.getElementById('light').onchange = e => document.getElementById('stage').classList.toggle('light', e.target.checked);
+render();
+</script>
+</body>
+</html>

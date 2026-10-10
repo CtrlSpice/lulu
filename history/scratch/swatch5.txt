@@ -1,0 +1,6 @@
+o=#7e3a5c
+s=#c98a96
+b=#f2cfcb
+g=#eb6f92
+e=#191724
+osbge
