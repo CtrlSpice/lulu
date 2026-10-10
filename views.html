@@ -41,6 +41,9 @@
     <button id="gillGuide">Show gill clearance</button>
     <button id="faceGuide">Show face guide</button>
     <button id="freckleGuide">Show freckle guide</button>
+    <button id="centerGuide">Show center line</button>
+    <button id="underGuide">Show body under tail</button>
+    <button id="tailGuide">Show side tail on back</button>
   </div>
   <div>
     <h3>Actual size</h3>
@@ -53,9 +56,13 @@
 </div>
 <script>
 const SCALE = 12, N = 32;
-const VIEWS = [['front', 'views/front.txt'], ['side', 'views/side.txt'], ['back', 'views/back.txt']];
+const REF = {};   // saved front and side views, for guides when they are not on screen
+const ref = v => window.views[v] ?? REF[v];
+const isBackView = v => v !== 'front' && v !== 'side';
+const DEFAULT_VIEWS = [['front', 'views/front.txt'], ['side', 'views/side.txt'], ['back', 'views/back.txt']];
+const VIEWS = new URLSearchParams(location.search).get('views')?.split(',').map(p => p.split(':')) ?? DEFAULT_VIEWS;
 const NAMES = { o: 'outline', s: 'skin shadow', b: 'skin', g: 'gill', G: 'gill shadow', w: 'eye shine', e: 'eye' };
-let palette = {}, light = false, tool = 'mark', painting = null, guide = false, gillGuide = false, faceGuide = false, freckleGuide = false;
+let palette = {}, light = false, tool = 'mark', painting = null, guide = false, gillGuide = false, faceGuide = false, freckleGuide = false, centerGuide = false, underGuide = false, tailGuide = false;
 const HEAD_ROWS = [5, 19];        // rows the head fills in the front view; the side must use the same rows
 const SIDE_CENTRE = 17;           // centre column of the head in the side view
 const original = {};
@@ -158,6 +165,30 @@ const drawFreckleGuide = (ctx, v) => {
   }
   ctx.restore();
 };
+// center line between columns 15 and 16, for the front and back views
+const drawCenterGuide = ctx => {
+  ctx.save(); ctx.strokeStyle = '#c4a7e7'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+  ctx.beginPath(); ctx.moveTo(16 * SCALE, 0); ctx.lineTo(16 * SCALE, N * SCALE); ctx.stroke(); ctx.restore();
+};
+// the body without a tail: same lower body, arms and feet as the front view (rows 22 down), drawn as a translucent outline
+const drawUnderGuide = ctx => {
+  ctx.save(); ctx.fillStyle = 'rgba(156, 207, 216, 0.45)';
+  ref('front').forEach((row, y) => { if (y < 22) return; row.forEach((ch, x) => { if (ch === 'o') ctx.fillRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4); }); });
+  ctx.restore();
+};
+// where the side view's tail lands in the back view: the rows it fills behind her back (left of column 9 in the side view),
+// drawn as a flat fin about 4 px thick on the spine (columns 14-17), since the side view cannot show its thickness
+const TAIL_BACK_EDGE = 9, TAIL_COLUMNS = [14, 15, 16, 17];
+const drawTailGuide = ctx => {
+  const rows = [];
+  ref('side').forEach((row, y) => { if (y >= 17 && row.slice(0, TAIL_BACK_EDGE).some(ch => ch !== '.')) rows.push(y); });
+  if (!rows.length) return;
+  const top = Math.min(...rows), bottom = Math.max(...rows);
+  ctx.save(); ctx.fillStyle = 'rgba(234, 157, 52, 0.45)'; ctx.strokeStyle = '#ea9d34'; ctx.lineWidth = 2;
+  for (let y = top; y <= bottom; y++) for (const x of TAIL_COLUMNS) ctx.fillRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4);
+  ctx.strokeRect(TAIL_COLUMNS[0] * SCALE, top * SCALE, TAIL_COLUMNS.length * SCALE, (bottom - top + 1) * SCALE);
+  ctx.restore();
+};
 const drawFaceGuide = ctx => {
   ctx.save();
   // face features that must stay just inside the front edge
@@ -213,6 +244,9 @@ const draw = () => {
     if (gillGuide && v === 'side') drawGillGuide(ctx);
     if (faceGuide && v === 'side') drawFaceGuide(ctx);
     if (freckleGuide) drawFreckleGuide(ctx, v);
+    if (centerGuide && v !== 'side') drawCenterGuide(ctx);
+    if (underGuide && isBackView(v)) drawUnderGuide(ctx);
+    if (tailGuide && isBackView(v)) drawTailGuide(ctx);
     ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 2;
     for (const [x, y] of window.marks[v]) ctx.strokeRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4);
     const p = previews[v].getContext('2d');
@@ -246,6 +280,9 @@ const addTool = (t, label, swClass, colour) => {
   b.append(sw, label); b.onclick = () => setTool(t); toolsEl.appendChild(b);
 };
 document.getElementById('reset').onclick = () => { for (const [v] of VIEWS) { window.views[v] = original[v].map(r => [...r]); window.marks[v] = []; } draw(); };
+document.getElementById('centerGuide').onclick = e => { centerGuide = !centerGuide; e.target.textContent = centerGuide ? 'Hide center line' : 'Show center line'; draw(); };
+document.getElementById('tailGuide').onclick = e => { tailGuide = !tailGuide; e.target.textContent = tailGuide ? 'Hide side tail on back' : 'Show side tail on back'; draw(); };
+document.getElementById('underGuide').onclick = e => { underGuide = !underGuide; e.target.textContent = underGuide ? 'Hide body under tail' : 'Show body under tail'; draw(); };
 document.getElementById('freckleGuide').onclick = e => { freckleGuide = !freckleGuide; e.target.textContent = freckleGuide ? 'Hide freckle guide' : 'Show freckle guide'; draw(); };
 document.getElementById('faceGuide').onclick = e => { faceGuide = !faceGuide; e.target.textContent = faceGuide ? 'Hide face guide' : 'Show face guide'; draw(); };
 document.getElementById('gillGuide').onclick = e => { gillGuide = !gillGuide; e.target.textContent = gillGuide ? 'Hide gill clearance' : 'Show gill clearance'; draw(); };
@@ -261,7 +298,7 @@ const parse = text => {
   return rows;
 };
 
-Promise.all(VIEWS.map(([, f]) => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
+Promise.all(['front', 'side'].map(v => fetch('views/' + v + '.txt', { cache: 'no-store' }).then(r => r.text()).then(t => { REF[v] = t.split('\n').filter(l => l && !/^\S=#/.test(l)).map(r => r.split('')); }))).then(() => Promise.all(VIEWS.map(([, f]) => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
   VIEWS.forEach(([v], i) => {
     original[v] = parse(texts[i]);
     window.views[v] = original[v].map(r => [...r]);
@@ -287,7 +324,7 @@ Promise.all(VIEWS.map(([, f]) => fetch(f, { cache: 'no-store' }).then(r => r.tex
   addTool('.', 'Erase', 'erase');
   setTool('mark');
   draw();
-});
+}));
 </script>
 </body>
 </html>

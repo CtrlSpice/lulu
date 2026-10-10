@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lulu tail wag</title>
+<style>
+  body { background: #232136; color: #e0def4; font: 14px ui-monospace, monospace; margin: 24px; }
+  .row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 28px; }
+  figure { margin: 0; }
+  figcaption { margin-bottom: 8px; color: #908caa; }
+  canvas { image-rendering: pixelated; display: block; }
+  .frames { display: flex; gap: 8px; margin-top: 8px; }
+  button { font: inherit; padding: 6px 14px; background: #393552; color: #e0def4; border: 1px solid #6e6a86; border-radius: 6px; cursor: pointer; }
+  label { margin-left: 16px; }
+</style>
+<p>
+  <button id="play">Play</button>
+  <label>Frame time <input id="speed" type="range" min="150" max="1200" step="50" value="500"> <span id="ms">500</span> ms</label>
+  <label><input id="light" type="checkbox"> Dawn background</label>
+</p>
+<div class="row" id="anims"></div>
+<script>
+const SEQS = [
+  ['Yours: left, right', ['curl-flipped.txt', 'curl-yours.txt']],
+];
+const SCALE = 8, SMALL = 3;
+const parse = t => {
+  const lines = t.split('\n').filter(Boolean);
+  const pal = Object.fromEntries(lines.filter(l => /^\S=#/.test(l)).map(l => [l[0], l.slice(2)]));
+  return { pal, rows: lines.filter(l => !/^\S=#/.test(l)) };
+};
+const paint = (ctx, g, s, bg) => {
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 32 * s, 32 * s);
+  g.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== '.') { ctx.fillStyle = g.pal[c]; ctx.fillRect(x * s, y * s, s, s); } }));
+};
+const files = [...new Set(SEQS.flatMap(([, f]) => f))];
+Promise.all(files.map(f => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
+  const grids = Object.fromEntries(files.map((f, i) => [f, parse(texts[i])]));
+  const anims = SEQS.map(([title, seq]) => {
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<figcaption>${title}</figcaption>`;
+    const big = document.createElement('canvas'); big.width = big.height = 32 * SCALE;
+    const small = document.createElement('canvas'); small.width = small.height = 32 * SMALL;
+    const strip = document.createElement('div'); strip.className = 'frames';
+    const stills = seq.map(() => { const c = document.createElement('canvas'); c.width = c.height = 32 * SMALL; strip.append(c); return c; });
+    const row = document.createElement('div'); row.className = 'row'; row.style.marginBottom = '0';
+    row.append(big, small);
+    fig.append(row, strip);
+    document.getElementById('anims').append(fig);
+    return { seq, big, small, stills };
+  });
+  let frame = 0, timer = null;
+  const bg = () => document.getElementById('light').checked ? '#f2e9e1' : '#232136';
+  const draw = () => anims.forEach(a => {
+    const g = grids[a.seq[frame % a.seq.length]];
+    paint(a.big.getContext('2d'), g, SCALE, bg());
+    paint(a.small.getContext('2d'), g, SMALL, bg());
+    a.stills.forEach((c, i) => { paint(c.getContext('2d'), grids[a.seq[i]], SMALL, bg()); c.style.outline = i === frame % a.seq.length ? '2px solid #eb6f92' : 'none'; });
+  });
+  const speed = document.getElementById('speed');
+  const start = () => { timer = setInterval(() => { frame++; draw(); }, +speed.value); };
+  const stop = () => { clearInterval(timer); timer = null; };
+  document.getElementById('play').onclick = e => { if (timer) { stop(); e.target.textContent = 'Play'; } else { start(); e.target.textContent = 'Pause'; } };
+  speed.oninput = () => { document.getElementById('ms').textContent = speed.value; if (timer) { stop(); start(); } };
+  document.getElementById('light').onchange = draw;
+  draw();
+});
+</script>

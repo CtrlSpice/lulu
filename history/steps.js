@@ -36,5 +36,11 @@ const ROWS = [
   ['Side gills', '', [X(VV + 'side-full-petals.txt', 'full petals'), K('../gills/side/f-filled.txt', 'folded heart'), X('../gills/side/root-col-13-row-12.txt', 'low'), K('../gills/side/far-b.txt', 'far gill'), X('../gills/side/far-c.txt', '"geometry wrong"')]],
   ['Side arm', '', [K(VV + 'side-arm-yours.txt', 'yours'), X('../arms/side-arm.txt', 'pocket'), X('../arms/side-arm-soft-back.txt', 'pocket II'), X('../arms/side-arm-forward-more.txt', '"too penis"')]],
   ['Gill height', '', [K('../experiments/low-gills/side-down-1.txt', 'ear height'), P('../experiments/low-gills/front.txt', 'neck gills'), X('../experiments/low-gills/side-down-4.txt', 'down 4')]],
-  ['Today', 'checkpoint 20', [K(C + '20-freckle-fix/front.txt', 'front'), K(C + '20-freckle-fix/side.txt', 'side'), K(C + '20-freckle-fix/back.txt', 'back')]],
+  ['Freckle fix', 'checkpoint 20', [K(C + '20-freckle-fix/front.txt', 'front'), K(C + '20-freckle-fix/side.txt', 'side'), K(C + '20-freckle-fix/back.txt', 'back')]],
+  ['Tail', 'never a penis', [K(C + '21-tail-swish-back/back.txt', 'swished aside'), X('../tail/back-stubby.txt', 'stubbier: "a penis again"'), K(C + '22-tail-hip/back.txt', 'hip line'), K(C + '23-tail-redraw/back.txt', 'your redraw'), K(C + '24-centered-tail/back.txt', 'centred')]],
+  ['Curled tail', 'side first, then back', [K(C + '25-curled-tail-side/side.txt', 'curl'), X(VV + 'side-with-foot.txt', 'front foot: "hate"'), K(C + '26-curled-tail-back/back.txt', 'back curl'), K(C + '27-no-foot/side.txt', 'no foot')]],
+  ['tool', "Back-view guides", "Body under the tail and the side tail, drawn over any back grid."],
+  ['Wag', 'left, centre, right?', [X('../versions/tail/walk/curl-centre-1791667502.txt', 'my centre: "performing acts"'), X('../tail/walk/curl-centre.txt', 'your centre: not needed'), X('../tail/walk/centre-lean-right.txt', 'leaning centre'), P('../versions/tail/walk/curl-yours-1791670454.txt', 'first wag'), X('../tail/walk/fixed-top-right.txt', 'my fixed top: wrong')]],
+  ['tool', "Wag player", "Two frames side by side, paused until you press Play. Lulu's first motion."],
+  ['Today', 'back and forth', [K('../tail/walk/curl-flipped.txt', 'left'), K('../tail/walk/curl-yours.txt', 'right')]],
 ];
