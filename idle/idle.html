@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lulu idle</title>
+<style>
+  body { background: #232136; color: #e0def4; font: 14px ui-monospace, monospace; margin: 24px; }
+  .row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+  figure { margin: 0 0 28px; }
+  figcaption { margin-bottom: 8px; color: #908caa; }
+  canvas { image-rendering: pixelated; display: block; }
+  .pair { display: flex; gap: 16px; align-items: flex-start; }
+  button { font: inherit; padding: 6px 14px; background: #393552; color: #e0def4; border: 1px solid #6e6a86; border-radius: 6px; cursor: pointer; }
+  label { margin-left: 16px; }
+</style>
+<p>
+  <button id="play">Play</button>
+  <label>Speed <input id="speed" type="range" min="0.5" max="2" step="0.25" value="1"> <span id="x">1</span>×</label>
+  <label><input id="light" type="checkbox"> Dawn background</label>
+</p>
+<div class="row" id="anims"></div>
+<script>
+// Each animation is a list of [frame file, milliseconds].
+const ANIMS = [
+  ['Blink', [['front-open.txt', 2400], ['front-blink.txt', 150]]],
+  ['Dip, shadow moves down, belly fills out', [['front-open.txt', 700], ['front-breathe-belly.txt', 700]]],
+  ['Both: three breaths, then a blink', [['front-open.txt', 700], ['front-breathe-belly.txt', 700], ['front-open.txt', 700], ['front-breathe-belly.txt', 700], ['front-open.txt', 700], ['front-breathe-belly.txt', 700], ['front-open.txt', 550], ['front-blink.txt', 150]]],
+];
+const SCALE = 8, SMALL = 3;
+const parse = t => {
+  const lines = t.split('\n').filter(Boolean);
+  const pal = Object.fromEntries(lines.filter(l => /^\S=#/.test(l)).map(l => [l[0], l.slice(2)]));
+  return { pal, rows: lines.filter(l => !/^\S=#/.test(l)) };
+};
+const paint = (ctx, g, s, bg) => {
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 32 * s, 32 * s);
+  g.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== '.') { ctx.fillStyle = g.pal[c]; ctx.fillRect(x * s, y * s, s, s); } }));
+};
+const files = [...new Set(ANIMS.flatMap(([, f]) => f.map(([n]) => n)))];
+Promise.all(files.map(f => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
+  const grids = Object.fromEntries(files.map((f, i) => [f, parse(texts[i])]));
+  const bg = () => document.getElementById('light').checked ? '#f2e9e1' : '#232136';
+  const anims = ANIMS.map(([title, frames]) => {
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<figcaption>${title}</figcaption>`;
+    const big = document.createElement('canvas'); big.width = big.height = 32 * SCALE;
+    const small = document.createElement('canvas'); small.width = small.height = 32 * SMALL;
+    const pair = document.createElement('div'); pair.className = 'pair'; pair.append(big, small);
+    fig.append(pair);
+    document.getElementById('anims').append(fig);
+    return { frames, big, small, i: 0, timer: null };
+  });
+  const show = a => { const g = grids[a.frames[a.i][0]]; paint(a.big.getContext('2d'), g, SCALE, bg()); paint(a.small.getContext('2d'), g, SMALL, bg()); };
+  const speed = () => +document.getElementById('speed').value;
+  const tick = a => { a.timer = setTimeout(() => { a.i = (a.i + 1) % a.frames.length; show(a); tick(a); }, a.frames[a.i][1] / speed()); };
+  let playing = false;
+  document.getElementById('play').onclick = e => {
+    playing = !playing; e.target.textContent = playing ? 'Pause' : 'Play';
+    anims.forEach(a => { clearTimeout(a.timer); if (playing) tick(a); });
+  };
+  document.getElementById('speed').oninput = e => { document.getElementById('x').textContent = e.target.value; };
+  document.getElementById('light').onchange = () => anims.forEach(show);
+  anims.forEach(show);
+});
+</script>
