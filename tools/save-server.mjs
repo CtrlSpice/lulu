@@ -1,4 +1,4 @@
-// Tiny local receiver: POST /<name>.txt writes the body into the target folder. Only plain .txt names are accepted.
+// Tiny local receiver: POST /<name>.txt writes the body into the target folder (inbox/, ignored by Git). Only plain .txt and .png names are accepted.
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 const dir = process.argv[2];
 http.createServer((req, res) => {
