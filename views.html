@@ -44,6 +44,7 @@
     <button id="centerGuide">Show center line</button>
     <button id="underGuide">Show body under tail</button>
     <button id="tailGuide">Show side tail on back</button>
+    <button id="headOutline">Show head outline</button>
   </div>
   <div>
     <h3>Actual size</h3>
@@ -62,7 +63,7 @@ const isBackView = v => v !== 'front' && v !== 'side';
 const DEFAULT_VIEWS = [['front', 'views/front.txt'], ['side', 'views/side.txt'], ['back', 'views/back.txt']];
 const VIEWS = new URLSearchParams(location.search).get('views')?.split(',').map(p => p.split(':')) ?? DEFAULT_VIEWS;
 const NAMES = { o: 'outline', s: 'skin shadow', b: 'skin', g: 'gill', G: 'gill shadow', w: 'eye shine', e: 'eye' };
-let palette = {}, light = false, tool = 'mark', painting = null, guide = false, gillGuide = false, faceGuide = false, freckleGuide = false, centerGuide = false, underGuide = false, tailGuide = false;
+let palette = {}, light = false, tool = 'mark', painting = null, guide = false, gillGuide = false, faceGuide = false, freckleGuide = false, centerGuide = false, underGuide = false, tailGuide = false, headOutline = false;
 const HEAD_ROWS = [5, 19];        // rows the head fills in the front view; the side must use the same rows
 const SIDE_CENTRE = 17;           // centre column of the head in the side view
 const original = {};
@@ -189,6 +190,29 @@ const drawTailGuide = ctx => {
   ctx.strokeRect(TAIL_COLUMNS[0] * SCALE, top * SCALE, TAIL_COLUMNS.length * SCALE, (bottom - top + 1) * SCALE);
   ctx.restore();
 };
+// the saved front view's head with its gills: every coloured pixel above the chin outline (rows 0-18),
+// plus the outline pixels touching it; drawn as a line around its outer edge
+const headCells = () => {
+  const g = ref('front'), inside = new Set(), key = (x, y) => y * N + x;
+  g.forEach((row, y) => row.forEach((ch, x) => { if (y <= 18 && 'bsewgG'.includes(ch)) inside.add(key(x, y)); }));
+  const cells = new Set(inside);
+  g.forEach((row, y) => row.forEach((ch, x) => {
+    if (ch === 'o' && [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => inside.has(key(x + dx, y + dy)))) cells.add(key(x, y));
+  }));
+  return cells;
+};
+const drawHeadOutline = ctx => {
+  const cells = headCells(), has = (x, y) => cells.has(y * N + x);
+  ctx.save(); ctx.strokeStyle = '#f6c177'; ctx.lineWidth = 3; ctx.beginPath();
+  for (const k of cells) {
+    const x = k % N, y = Math.floor(k / N), l = x * SCALE, t = y * SCALE, r = l + SCALE, b = t + SCALE;
+    if (!has(x, y - 1)) { ctx.moveTo(l, t); ctx.lineTo(r, t); }
+    if (!has(x, y + 1)) { ctx.moveTo(l, b); ctx.lineTo(r, b); }
+    if (!has(x - 1, y)) { ctx.moveTo(l, t); ctx.lineTo(l, b); }
+    if (!has(x + 1, y)) { ctx.moveTo(r, t); ctx.lineTo(r, b); }
+  }
+  ctx.stroke(); ctx.restore();
+};
 const drawFaceGuide = ctx => {
   ctx.save();
   // face features that must stay just inside the front edge
@@ -247,6 +271,7 @@ const draw = () => {
     if (centerGuide && v !== 'side') drawCenterGuide(ctx);
     if (underGuide && isBackView(v)) drawUnderGuide(ctx);
     if (tailGuide && isBackView(v)) drawTailGuide(ctx);
+    if (headOutline && v !== 'side') drawHeadOutline(ctx);
     ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 2;
     for (const [x, y] of window.marks[v]) ctx.strokeRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4);
     const p = previews[v].getContext('2d');
@@ -282,6 +307,7 @@ const addTool = (t, label, swClass, colour) => {
 document.getElementById('reset').onclick = () => { for (const [v] of VIEWS) { window.views[v] = original[v].map(r => [...r]); window.marks[v] = []; } draw(); };
 document.getElementById('centerGuide').onclick = e => { centerGuide = !centerGuide; e.target.textContent = centerGuide ? 'Hide center line' : 'Show center line'; draw(); };
 document.getElementById('tailGuide').onclick = e => { tailGuide = !tailGuide; e.target.textContent = tailGuide ? 'Hide side tail on back' : 'Show side tail on back'; draw(); };
+document.getElementById('headOutline').onclick = e => { headOutline = !headOutline; e.target.textContent = headOutline ? 'Hide head outline' : 'Show head outline'; draw(); };
 document.getElementById('underGuide').onclick = e => { underGuide = !underGuide; e.target.textContent = underGuide ? 'Hide body under tail' : 'Show body under tail'; draw(); };
 document.getElementById('freckleGuide').onclick = e => { freckleGuide = !freckleGuide; e.target.textContent = freckleGuide ? 'Hide freckle guide' : 'Show freckle guide'; draw(); };
 document.getElementById('faceGuide').onclick = e => { faceGuide = !faceGuide; e.target.textContent = faceGuide ? 'Hide face guide' : 'Show face guide'; draw(); };
