@@ -42,5 +42,10 @@ const ROWS = [
   ['tool', "Back-view guides", "Body under the tail and the side tail, drawn over any back grid."],
   ['Wag', 'left, centre, right?', [X('../versions/tail/walk/curl-centre-1791667502.txt', 'my centre: "performing acts"'), X('../tail/walk/curl-centre.txt', 'your centre: not needed'), X('../tail/walk/centre-lean-right.txt', 'leaning centre'), P('../versions/tail/walk/curl-yours-1791670454.txt', 'first wag'), X('../tail/walk/fixed-top-right.txt', 'my fixed top: wrong')]],
   ['tool', "Wag player", "Two frames side by side, paused until you press Play. Lulu's first motion."],
-  ['Today', 'back and forth', [K('../tail/walk/curl-flipped.txt', 'left'), K('../tail/walk/curl-yours.txt', 'right')]],
+  ['Wag', 'back and forth', [K('../tail/walk/curl-flipped.txt', 'left'), K('../tail/walk/curl-yours.txt', 'right')]],
+  ['Idle', 'blink and breath', [K('../idle/front-blink.txt', 'blink'), X('../idle/front-breathe.txt', 'dip'), X('../idle/front-inhale.txt', 'neck stretch'), X('../idle/front-breathe-soft-narrow.txt', 'soft neck'), K('../idle/front-breathe-belly.txt', 'belly breath')]],
+  ['Gills', 'a wave as she breathes', [X('../idle/gills/shimmer-a.txt', 'shimmer'), K('../idle/gills/down-in.txt', 'top tucks'), K('../idle/gills/down-in-top-mid.txt', 'middle'), K('../idle/gills/down-in-all.txt', 'all tucked')]],
+  ['tool', "Sprite sheets", "Each animation exported as a tiny PNG strip plus a frame list, ready for CSS."],
+  ['tool', "Any-width editor", "Grids of any width, a reference outline you can shift sideways, and a column guide."],
+  ['With Clawd', 'fan art', [K('../fan-art/lulu-2.txt', 'waves back'), K('../fan-art/lulu-smile-2.txt', 'smile'), K('../fan-art/lulu-eyes-closed.txt', 'closed eyes'), P('../fan-art/clawd/clawd.txt', 'Clawd (Anthropic)')]],
 ];
