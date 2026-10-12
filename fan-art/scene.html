@@ -22,7 +22,7 @@ const WAVE = [['front-open.txt', 900], ['gills/down-out.txt', 250], ['gills/down
 const lulu = ([f, ms]) => ({ file: f.startsWith('lulu-') ? f : LULU + f, ms, x: 0 });
 
 // the story, with times in ms from Play
-const FAR = 56, BIT = 46, MOST = 22, CLOSE = 16; // Clawd's grid position; at CLOSE his head is under Lulu's hand
+const FAR = 56, BIT = 46, MOST = 22, CLOSE = 17; // Clawd's grid position; at CLOSE his head is under Lulu's hand
 const START = 800;                                // apart, before he sets off
 const CLAWD_WAVE_START = START + (FAR - BIT) * 100, CLAWD_WAVE = 6 * 180;
 const LULU_WAVE = 250 + 3 * 400 + 400;           // lift, three flicks, arm down
@@ -39,7 +39,10 @@ const luluLoop = [...WAVE, ...WAVE, ['front-open.txt', 550], ['front-blink.txt',
 
 // Clawd
 const clawdTrack = [];
-const hold = (f, ms, x, y = 0) => clawdTrack.push({ file: CLAWD + f, ms, x, y });   // y < 0 lifts him off the ground
+// beside Lulu he leans into the pat: frames shown there use their "-lean" version (upper body 1 px towards her, bottom of the legs where they were)
+const LEANS = new Set(['clawd', 'clawd-nn', 'blush-1-nn', 'blush-2-nn', 'blush-2', 'squish-2-blush-1', 'squish-2-blush-2', 'squish-2-blush-2-open']);
+let leaning = true;
+const hold = (f, ms, x, y = 0) => clawdTrack.push({ file: CLAWD + (leaning && x === CLOSE && LEANS.has(f.replace('.txt', '')) ? f.replace('.txt', '-lean.txt') : f), ms, x, y });   // y < 0 lifts him off the ground
 const scuttle = (from, to) => { const dir = Math.sign(to - from); for (let x = from, i = 0; x !== to; x += dir, i++) hold(i % 2 ? 'step-b.txt' : 'step-a.txt', 100, x); };
 hold('clawd.txt', START, FAR);                                                              // apart
 scuttle(FAR, BIT);                                                                          // over a bit
@@ -56,6 +59,7 @@ hold('clawd.txt', 500, CLOSE);                                                  
 const PATS = [['clawd-nn.txt', 'squish-2-blush-1.txt'], ['blush-1-nn.txt', 'squish-2-blush-2.txt'], ['blush-2-nn.txt', 'squish-2-blush-2.txt']]; // [hand up: full height, hand down: squished]
 for (const [up, down] of PATS) { hold(up, PAT, CLOSE); hold(down, PAT, CLOSE); }
 hold('blush-2-nn.txt', PAT, CLOSE);        // the third pat finishes: her hand lifts, he is back up, blushing
+leaning = false; hold('blush-2-nn.txt', 200, CLOSE);   // straightens up before the happy bounce
 for (let i = 0; i < 2; i++) { hold('squish-2-blush-2.txt', BOUNCE, CLOSE); hold('blush-2-nn.txt', BOUNCE, CLOSE); }  // bounces in place, happy
 hold('blush-2.txt', 300, CLOSE);           // eyes open again, still blushing
 const AWAY = FAR;                          // ends where he started

@@ -58,12 +58,21 @@ while (queue.length && endAt === null) {
 }
 endAt ??= now;
 
+// crop to the area anything is ever drawn in, plus a 2 px margin
+const BG = '#232136', MARGIN = 2;
+let x0 = W, y0 = H, x1 = -1, y1 = -1;
+for (const f of frames) f.px.forEach((c, i) => { if (c !== BG) { const x = i % W, y = Math.floor(i / W); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } });
+x0 -= MARGIN; y0 -= MARGIN; x1 += MARGIN; y1 = Math.min(H - 1, y1 + MARGIN);   // the margin may reach past the scene's edge: filled with background
+const CW = x1 - x0 + 1, CH = y1 - y0 + 1;
+for (const f of frames) f.px = Array.from({ length: CW * CH }, (_, i) => { const x = x0 + (i % CW), y = y0 + Math.floor(i / CW); return x < 0 || y < 0 || x >= W || y >= H ? BG : f.px[y * W + x]; });
+console.log('cropped to', CW + 'x' + CH, 'scene pixels, from column', x0, 'row', y0);
+
 // GIF encoding (global palette, variable frame delays)
 const colours = [...new Set(frames.flatMap(f => f.px))];
 const bits = Math.max(2, Math.ceil(Math.log2(colours.length)));
 const table = Buffer.alloc((1 << bits) * 3);
 colours.forEach((c, i) => table.set([1, 3, 5].map(o => parseInt(c.slice(o, o + 2), 16)), i * 3));
-const GW = W * OUT_SCALE, GH = H * OUT_SCALE;
+const GW = CW * OUT_SCALE, GH = CH * OUT_SCALE;
 const lzw = (px, minSize) => {
   const clear = 1 << minSize, end = clear + 1, bytes = [];
   let acc = 0, accBits = 0, size = minSize + 1, next = end + 1, dict = new Map();
@@ -92,7 +101,7 @@ frames.forEach((f, i) => {
   const until = i + 1 < frames.length ? frames[i + 1].at : endAt;
   const cs = Math.max(2, Math.round((until - f.at) / 10));
   const idx = new Uint8Array(GW * GH);
-  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) idx[y * GW + x] = colours.indexOf(f.px[Math.floor(y / OUT_SCALE) * W + Math.floor(x / OUT_SCALE)]);
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) idx[y * GW + x] = colours.indexOf(f.px[Math.floor(y / OUT_SCALE) * CW + Math.floor(x / OUT_SCALE)]);
   parts.push(Buffer.from([0x21, 0xf9, 4, 0, ...u16(cs), 0, 0]), Buffer.from([0x2c, 0, 0, 0, 0, ...u16(GW), ...u16(GH), 0]), lzw(idx, bits));
   kept++;
 });
