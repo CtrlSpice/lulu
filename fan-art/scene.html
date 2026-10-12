@@ -58,7 +58,7 @@ for (const [up, down] of PATS) { hold(up, PAT, CLOSE); hold(down, PAT, CLOSE); }
 hold('blush-2-nn.txt', PAT, CLOSE);        // the third pat finishes: her hand lifts, he is back up, blushing
 for (let i = 0; i < 2; i++) { hold('squish-2-blush-2.txt', BOUNCE, CLOSE); hold('blush-2-nn.txt', BOUNCE, CLOSE); }  // bounces in place, happy
 hold('blush-2.txt', 300, CLOSE);           // eyes open again, still blushing
-const AWAY = 60;
+const AWAY = FAR;                          // ends where he started
 for (let x = CLOSE, i = 0; x !== AWAY; x++, i++) hold(i % 2 ? 'step-b-blush.txt' : 'step-a-blush.txt', 100, x);  // and scuttles away, still blushing
 hold('blush-2.txt', Infinity, AWAY);
 // hearts pop up once he has cleared Lulu (his arms start right of her gill, column 31) and follow him for a dozen steps
@@ -72,18 +72,34 @@ const HEART = { small: ['g.g', 'ggg', '.g.'], big: ['.g.g.', 'ggggg', '.gGg.', '
 const HEARTS = [{ at: 0, dx: -5, dy: -3 }, { at: 2, dx: 3, dy: -2 }, { at: 4, dx: -1, dy: -5 }, { at: 6, dx: 5, dy: -3 }];
 
 const parse = t => { const l = t.split('\n').filter(Boolean); return { pal: Object.fromEntries(l.filter(x => /^\S=#/.test(x)).map(x => [x[0], x.slice(2)])), rows: l.filter(x => !/^\S=#/.test(x)) }; };
-const files = [...new Set([...luluIntro, ...luluLoop, ...clawdTrack].map(s => s.file))];
+// Lulu's smile, independent of her arm: widen (smile 1), open (smile 2) and hold through the pats, close (smile 1), back to normal.
+// The smile frames are her pat pose with the smile painted on; only their mouth area (rows 12-18) is drawn over her current frame.
+const PATS_END = PAT_START + 7 * PAT;
+const smileTrack = [{ file: null, ms: PAT_START - 400 }, { file: 'lulu-smile-1.txt', ms: 200 }, { file: 'lulu-smile-2.txt', ms: PATS_END - PAT_START + 200 },
+  { file: 'lulu-smile-1.txt', ms: 300 }, { file: null, ms: Infinity }];
+// her eyes, also independent: closed (happy arcs) from the first pat until the patting is over
+const eyesTrack = [{ file: null, ms: PAT_START }, { file: 'lulu-eyes-closed.txt', ms: PATS_END - PAT_START }, { file: null, ms: Infinity }];
+const files = [...new Set([...luluIntro, ...luluLoop, ...clawdTrack].map(s => s.file).concat(['lulu-pat-1.txt', 'lulu-smile-1.txt', 'lulu-smile-2.txt', 'lulu-eyes-closed.txt']))];
 Promise.all(files.map(f => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
   const grids = Object.fromEntries(files.map((f, i) => [f, parse(texts[i])]));
   const canvas = document.getElementById('scene'); canvas.width = W * SCALE; canvas.height = H * SCALE;
   const ctx = canvas.getContext('2d');
   // a track plays its intro once, then its loop forever; a step lasting Infinity ends the track there
-const tracks = [{ intro: clawdTrack, loop: [] }, { intro: luluIntro, loop: luluLoop }].map(t => ({ ...t, i: 0, timer: null }));
+const tracks = [{ intro: clawdTrack, loop: [] }, { intro: luluIntro, loop: luluLoop }, { intro: smileTrack, loop: [], face: true }, { intro: eyesTrack, loop: [], face: true }].map(t => ({ ...t, i: 0, timer: null }));
+  // each smile frame as just the pixels it changes in the mouth area, compared with the plain pat pose
+  const mouth = f => { const base = grids['lulu-pat-1.txt'].rows, g = grids[f]; return g.rows.flatMap((r, y) => y < 12 || y > 18 ? [] : [...r].flatMap((c, x) => c !== base[y][x] ? [[x, y, g.pal[c]]] : [])); };
+  // the closed eyes: the pixels lulu-eyes-closed changes compared with the open-mouth smile it was painted on (rows 9-14)
+  const eyes = f => { const base = grids['lulu-smile-2.txt'].rows, g = grids[f]; return g.rows.flatMap((r, y) => y < 9 || y > 14 ? [] : [...r].flatMap((c, x) => c !== base[y][x] ? [[x, y, g.pal[c]]] : [])); };
+  const SMILES = { 'lulu-smile-1.txt': mouth('lulu-smile-1.txt'), 'lulu-smile-2.txt': mouth('lulu-smile-2.txt'), 'lulu-eyes-closed.txt': eyes('lulu-eyes-closed.txt') };
 const stepOf = t => t.i < t.intro.length ? t.intro[t.i] : t.loop[(t.i - t.intro.length) % t.loop.length];
   const paint = (g, ox, oy = 0) => g.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== '.' && x + ox < W) { ctx.fillStyle = g.pal[c]; ctx.fillRect((x + ox) * SCALE, (y + oy) * SCALE, SCALE, SCALE); } }));
   const draw = () => {
     ctx.fillStyle = document.getElementById('light').checked ? '#f2e9e1' : '#232136'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (const t of tracks) { const s = stepOf(t); paint(grids[s.file], s.x, s.y); }
+    for (const t of tracks) {
+      const s = stepOf(t);
+      if (!t.face) paint(grids[s.file], s.x, s.y);
+      else if (s.file) for (const [x, y, colour] of SMILES[s.file]) { ctx.fillStyle = colour; ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE); }
+    }
     const c = stepOf(tracks[0]);
     if (c.hearts !== undefined) for (const h of HEARTS) {
       const age = c.hearts - h.at; if (age < 0 || age > 5) continue;
