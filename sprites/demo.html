@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lulu sprites</title>
+<style>
+  body { background: #232136; color: #e0def4; font: 14px ui-monospace, monospace; margin: 24px; }
+  .row { display: flex; gap: 40px; flex-wrap: wrap; }
+  figcaption { color: #908caa; margin-bottom: 8px; }
+  figure { margin: 0; }
+  /* the sprite: a frame-sized window onto the strip, which moves one frame at a time */
+  .sprite { width: calc(32px * var(--scale)); height: calc(32px * var(--scale)); overflow: hidden; }
+  .sprite img { height: 100%; image-rendering: pixelated; display: block; animation-timing-function: step-end; animation-iteration-count: infinite; animation-play-state: paused; }
+  body.playing .sprite img { animation-play-state: running; }
+  @media (prefers-reduced-motion: reduce) { .sprite img { animation: none !important; } }
+  button { font: inherit; padding: 6px 14px; background: #393552; color: #e0def4; border: 1px solid #6e6a86; border-radius: 6px; cursor: pointer; }
+</style>
+<p><button id="play">Play</button> Plain CSS: each animation is an <code>@keyframes</code> built from its JSON frame list.</p>
+<div class="row" id="sprites"></div>
+<script>
+// For each animation: one keyframe per step at the step's start time as a percentage of the loop,
+// moving the strip left by the step's frame index; step-end timing holds each frame until the next keyframe.
+const SCALE = 6;
+const keyframes = (name, sheet) => {
+  const total = sheet.frames.reduce((s, f) => s + f.ms, 0);
+  let t = 0;
+  const steps = sheet.frames.map(f => { const at = (t / total * 100).toFixed(4); t += f.ms; return `${at}% { transform: translateX(${-f.frame * 100 / sheet.frameCount}%); }`; });
+  return { css: `@keyframes ${name} { ${steps.join(' ')} 100% { transform: translateX(${-sheet.frames.at(-1).frame * 100 / sheet.frameCount}%); } }`, total };
+};
+Promise.all(['wave-breath', 'wag', 'blink'].map(n => fetch(n + '.json', { cache: 'no-store' }).then(r => r.json()).then(s => [n, s]))).then(sheets => {
+  const style = document.createElement('style');
+  for (const [name, sheet] of sheets) {
+    const { css, total } = keyframes(name, sheet);
+    style.textContent += css + '\n';
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<figcaption>${name} · ${sheet.frameCount} frames · ${total} ms loop</figcaption>
+      <div class="sprite" style="--scale: ${SCALE}"><img src="${sheet.image}" alt="" style="animation-name: ${name}; animation-duration: ${total}ms"></div>`;
+    document.getElementById('sprites').append(fig);
+  }
+  document.head.append(style);
+});
+document.getElementById('play').onclick = e => { const on = document.body.classList.toggle('playing'); e.target.textContent = on ? 'Pause' : 'Play'; };
+</script>

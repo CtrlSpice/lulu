@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lulu Turnaround</title>
+<style>
+  :root { --base: #191724; --surface: #1f1d2e; --overlay: #26233a; --muted: #6e6a86; --text: #e0def4; --foam: #9ccfd8; --rose: #ebbcba; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--base); color: var(--text); font: 14px/1.4 ui-monospace, Menlo, monospace; }
+  h1 { font-size: 16px; margin: 0 0 4px; color: var(--rose); }
+  p { margin: 0 0 12px; color: var(--muted); }
+  .views { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+  .view h2 { font-size: 13px; margin: 0 0 4px; color: var(--muted); font-weight: normal; }
+  canvas { image-rendering: pixelated; border-radius: 4px; max-width: 100%; cursor: crosshair; }
+  .panel { background: var(--surface); border: 1px solid var(--overlay); border-radius: 8px; padding: 12px; margin-top: 14px; display: flex; gap: 24px; flex-wrap: wrap; }
+  .panel h3 { font-size: 13px; margin: 0 0 6px; color: var(--muted); font-weight: normal; }
+  button { font: inherit; color: var(--text); background: var(--overlay); border: 1px solid var(--muted); border-radius: 4px; padding: 4px 10px; cursor: pointer; margin: 0 6px 6px 0; }
+  .tools { display: flex; flex-wrap: wrap; gap: 4px; max-width: 520px; }
+  .tool { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .tool.on { border-color: var(--foam); box-shadow: 0 0 0 1px var(--foam); }
+  .sw { width: 16px; height: 16px; border-radius: 3px; border: 1px solid #0008; flex: none; }
+  .sw.erase { background: repeating-conic-gradient(#888 0 25%, #ccc 0 50%) 0 0 / 8px 8px; }
+  .sw.mark { background: transparent; border: 2px solid #00e5ff; }
+  .previews { display: flex; gap: 8px; align-items: flex-end; }
+  #list { white-space: pre-wrap; color: var(--foam); font-size: 12px; max-height: 240px; overflow: auto; }
+</style>
+</head>
+<body>
+<h1>Lulu turnaround</h1>
+<p>Front, side and back share the same rows; the brighter lines every 4 pixels line up across all three. Paint with a colour, or Mark to point. Claude reads the result from this page.</p>
+<div class="views" id="views"></div>
+<div class="panel">
+  <div>
+    <h3>Tool</h3>
+    <div class="tools" id="tools"></div>
+    <h3 style="margin-top:12px">Page</h3>
+    <button id="reset">Undo all changes</button>
+    <button id="bg">Light background</button>
+    <button id="guide">Show head clearance</button>
+    <button id="gillGuide">Show gill clearance</button>
+    <button id="faceGuide">Show face guide</button>
+    <button id="freckleGuide">Show freckle guide</button>
+    <button id="centerGuide">Show center line</button>
+    <button id="underGuide">Show body under tail</button>
+    <button id="tailGuide">Show side tail on back</button>
+    <button id="headOutline">Show head outline</button>
+    <button id="columnGuide" hidden>Show column guide</button>
+    <button id="refOutline" hidden>Show reference outline</button>
+  </div>
+  <div>
+    <h3>Actual size</h3>
+    <div class="previews" id="previews"></div>
+  </div>
+  <div>
+    <h3>Changed or marked pixels</h3>
+    <div id="list">none</div>
+  </div>
+</div>
+<script>
+const SCALE = 12, N = 32;
+const REF = {};   // saved front and side views, for guides when they are not on screen
+const ref = v => window.views[v] ?? REF[v];
+const isBackView = v => v !== 'front' && v !== 'side';
+const DEFAULT_VIEWS = [['front', 'views/front.txt'], ['side', 'views/side.txt'], ['back', 'views/back.txt']];
+const VIEWS = new URLSearchParams(location.search).get('views')?.split(',').map(p => p.split(':')) ?? DEFAULT_VIEWS;
+// ?columns=view:12+17,other:14+19 marks those columns on those views, e.g. which legs are lifted in each frame
+// ?outline=path/to/grid.txt shows that grid's outline pixels over every view, e.g. a body part's resting position
+const OUTLINE_FILE = new URLSearchParams(location.search).get('outline');
+let refOutlineRows = null;
+const COLUMNS = Object.fromEntries((new URLSearchParams(location.search).get('columns') ?? '').split(',').filter(Boolean).map(p => { const [v, xs] = p.split(':'); return [v, xs.split(/[+ ]/).map(Number)]; }));
+const NAMES = { o: 'outline', s: 'skin shadow', b: 'skin', g: 'gill', G: 'gill shadow', w: 'eye shine', e: 'eye' };
+let palette = {}, light = false, tool = 'mark', painting = null, guide = false, gillGuide = false, faceGuide = false, freckleGuide = false, centerGuide = false, underGuide = false, tailGuide = false, headOutline = false, columnGuide = false, refOutline = false;
+const HEAD_ROWS = [5, 19];        // rows the head fills in the front view; the side must use the same rows
+const SIDE_CENTRE = 17;           // centre column of the head in the side view
+const original = {};
+window.views = {};   // current pixel rows per view, including painted changes
+window.marks = {};   // marked pixels per view
+window.changes = () => Object.fromEntries(Object.keys(window.views).map(v => [v,
+  window.views[v].flatMap((row, y) => row.flatMap((ch, x) => ch !== original[v][y][x] ? [[x, y, ch]] : []))]));
+
+const canvases = {}, previews = {};
+const headRun = (row, from) => {
+  const stop = ch => ch === '.' || ch === 'g' || ch === 'G';
+  if (stop(row[from])) return null;
+  let a = from, b = from;
+  while (a > 0 && !stop(row[a - 1])) a--;
+  while (b < N - 1 && !stop(row[b + 1])) b++;
+  return [a, b];
+};
+// gills in the front view, left side: gill pixels plus the outline touching them, outside the head
+const frontGills = () => {
+  const g = window.views.front, isGill = ch => ch === 'g' || ch === 'G', out = {};
+  g.forEach((row, y) => {
+    const run = headRun(row, 15), edge = run ? run[0] : 16;
+    const xs = [];
+    for (let x = 0; x < edge; x++) {
+      const ch = row[x];
+      const touches = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => isGill(g[y + dy]?.[x + dx]));
+      if (isGill(ch) || (ch === 'o' && touches)) xs.push(x);
+    }
+    if (xs.length) out[y] = Math.max(...xs) - Math.min(...xs) + 1;
+  });
+  return out;
+};
+// back edge of the head in the side view for a row (rows above the head use the top row of the head)
+const sideBack = y => {
+  for (let r = y; r < N; r++) { const run = headRun(window.views.side[r], SIDE_CENTRE); if (run) return run[0]; }
+  return SIDE_CENTRE;
+};
+const drawGillGuide = ctx => {
+  ctx.save();
+  const gills = frontGills(), rows = Object.keys(gills).map(Number);
+  const top = Math.min(...rows), bottom = Math.max(...rows);
+  // rows the gills must fill, as in the front view
+  ctx.strokeStyle = '#c4a7e7'; ctx.lineWidth = 2;
+  for (const y of [top, bottom + 1]) { ctx.beginPath(); ctx.moveTo(0, y * SCALE); ctx.lineTo(N * SCALE, y * SCALE); ctx.stroke(); }
+  // reach: how far a gill could sweep back behind the head if it goes back as far as it sticks out sideways
+  ctx.setLineDash([5, 3]);
+  let prev = null;
+  for (let y = top; y <= bottom; y++) {
+    const far = Math.max(0, sideBack(y) - (gills[y] ?? 0));
+    ctx.beginPath();
+    ctx.moveTo(far * SCALE, y * SCALE); ctx.lineTo(far * SCALE, (y + 1) * SCALE);
+    if (prev !== null) { ctx.moveTo(prev * SCALE, y * SCALE); ctx.lineTo(far * SCALE, y * SCALE); }
+    ctx.stroke();
+    prev = far;
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+};
+// freckles: shadow pixels on the head with plain skin on all four sides
+const freckles = grid => grid.flatMap((row, y) => row.flatMap((ch, x) =>
+  ch === 's' && y >= HEAD_ROWS[0] && y <= HEAD_ROWS[1] &&
+  [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dy]) => grid[y + dy]?.[x + dx] === 'b') ? [[x, y]] : []));
+// each head row is an oval: width from the front view, depth from the side view (face to the right)
+const ovalRow = y => {
+  const f = headRun(window.views.front[y], 15), sd = headRun(window.views.side[y], SIDE_CENTRE + 1);
+  if (!f || !sd) return null;
+  return { cx: (f[0] + f[1] + 1) / 2, hx: (f[1] - f[0] + 1) / 2, cz: (sd[0] + sd[1] + 1) / 2, hz: (sd[1] - sd[0] + 1) / 2, f, sd };
+};
+const clampTo = (v, [a, b]) => Math.min(b, Math.max(a, Math.floor(v)));
+// where freckles drawn in other views land in view v (the side view shows her right side; she is mirror-symmetric)
+const freckleSpots = v => {
+  const out = [];
+  if (v === 'side') {
+    for (const [src, dir, mine] of [['front', 1, x => x < 16], ['back', -1, x => x >= 16]])
+      for (const [x, y] of freckles(window.views[src])) {
+        const o = ovalRow(y); if (!o) continue;
+        const fx = mine(x) ? x : N - 1 - x;                     // a freckle on her left side shows here as its mirror
+        const u = (fx + 0.5 - o.cx) / o.hx, z = o.cz + dir * o.hz * Math.sqrt(Math.max(0, 1 - u * u));
+        out.push([clampTo(z, o.sd), y]);
+      }
+  } else {
+    const dir = v === 'front' ? 1 : -1;
+    for (const [z, y] of freckles(window.views.side)) {
+      const o = ovalRow(y); if (!o) continue;
+      const w = (z + 0.5 - o.cz) / o.hz;
+      if (Math.sign(w) !== dir && Math.abs(w) > 0.05) continue; // only freckles on the half facing this view
+      const off = o.hx * Math.sqrt(Math.max(0, 1 - w * w));
+      // her right side is on the left in the front view and on the right in the back view; mirror for her left side
+      const xr = v === 'front' ? o.cx - off : o.cx + off;
+      out.push([clampTo(xr, o.f), y], [N - 1 - clampTo(xr, o.f), y]);
+    }
+  }
+  return out;
+};
+const drawFreckleGuide = (ctx, v) => {
+  ctx.save();
+  ctx.fillStyle = '#ea9d34'; ctx.strokeStyle = '#191724'; ctx.lineWidth = 1.5;
+  for (const [x, y] of freckleSpots(v)) {
+    ctx.beginPath(); ctx.arc((x + 0.5) * SCALE, (y + 0.5) * SCALE, SCALE * 0.28, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+};
+// center line between columns 15 and 16, for the front and back views
+const drawCenterGuide = ctx => {
+  ctx.save(); ctx.strokeStyle = '#c4a7e7'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+  ctx.beginPath(); ctx.moveTo(16 * SCALE, 0); ctx.lineTo(16 * SCALE, N * SCALE); ctx.stroke(); ctx.restore();
+};
+// the body without a tail: same lower body, arms and feet as the front view (rows 22 down), drawn as a translucent outline
+const drawUnderGuide = ctx => {
+  ctx.save(); ctx.fillStyle = 'rgba(156, 207, 216, 0.45)';
+  ref('front').forEach((row, y) => { if (y < 22) return; row.forEach((ch, x) => { if (ch === 'o') ctx.fillRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4); }); });
+  ctx.restore();
+};
+// where the side view's tail lands in the back view: the rows it fills behind her back (left of column 9 in the side view),
+// drawn as a flat fin about 4 px thick on the spine (columns 14-17), since the side view cannot show its thickness
+const TAIL_BACK_EDGE = 9, TAIL_COLUMNS = [14, 15, 16, 17];
+const drawTailGuide = ctx => {
+  const rows = [];
+  ref('side').forEach((row, y) => { if (y >= 17 && row.slice(0, TAIL_BACK_EDGE).some(ch => ch !== '.')) rows.push(y); });
+  if (!rows.length) return;
+  const top = Math.min(...rows), bottom = Math.max(...rows);
+  ctx.save(); ctx.fillStyle = 'rgba(234, 157, 52, 0.45)'; ctx.strokeStyle = '#ea9d34'; ctx.lineWidth = 2;
+  for (let y = top; y <= bottom; y++) for (const x of TAIL_COLUMNS) ctx.fillRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4);
+  ctx.strokeRect(TAIL_COLUMNS[0] * SCALE, top * SCALE, TAIL_COLUMNS.length * SCALE, (bottom - top + 1) * SCALE);
+  ctx.restore();
+};
+// the saved front view's head with its gills: every coloured pixel above the chin outline (rows 0-18),
+// plus the outline pixels touching it; drawn as a line around its outer edge
+const headCells = () => {
+  const g = ref('front'), inside = new Set(), key = (x, y) => y * N + x;
+  g.forEach((row, y) => row.forEach((ch, x) => { if (y <= 18 && 'bsewgG'.includes(ch)) inside.add(key(x, y)); }));
+  const cells = new Set(inside);
+  g.forEach((row, y) => row.forEach((ch, x) => {
+    if (ch === 'o' && [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]].some(([dx, dy]) => inside.has(key(x + dx, y + dy)))) cells.add(key(x, y));
+  }));
+  return cells;
+};
+const drawHeadOutline = ctx => {
+  const cells = headCells(), has = (x, y) => cells.has(y * N + x);
+  ctx.save(); ctx.strokeStyle = '#f6c177'; ctx.lineWidth = 3; ctx.beginPath();
+  for (const k of cells) {
+    const x = k % N, y = Math.floor(k / N), l = x * SCALE, t = y * SCALE, r = l + SCALE, b = t + SCALE;
+    if (!has(x, y - 1)) { ctx.moveTo(l, t); ctx.lineTo(r, t); }
+    if (!has(x, y + 1)) { ctx.moveTo(l, b); ctx.lineTo(r, b); }
+    if (!has(x - 1, y)) { ctx.moveTo(l, t); ctx.lineTo(l, b); }
+    if (!has(x + 1, y)) { ctx.moveTo(r, t); ctx.lineTo(r, b); }
+  }
+  ctx.stroke(); ctx.restore();
+};
+const drawFaceGuide = ctx => {
+  ctx.save();
+  // face features that must stay just inside the front edge
+  ctx.strokeStyle = '#f6c177'; ctx.lineWidth = 2;
+  window.views.side.forEach((row, y) => row.forEach((ch, x) => {
+    if (y >= 11 && y <= 16 && x >= 18 && (ch === 'e' || ch === 'w' || (ch === 'o' && y >= 15 && row[x + 1] !== '.'))) ctx.strokeRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4);
+  }));
+  ctx.restore();
+};
+const drawGuide = ctx => {
+  ctx.save();
+  // rows the head must fill
+  ctx.fillStyle = 'rgba(235,111,146,0.18)';
+  ctx.fillRect(0, 0, N * SCALE, HEAD_ROWS[0] * SCALE);
+  ctx.strokeStyle = '#eb6f92'; ctx.lineWidth = 2;
+  for (const y of [HEAD_ROWS[0], HEAD_ROWS[1] + 1]) { ctx.beginPath(); ctx.moveTo(0, y * SCALE); ctx.lineTo(N * SCALE, y * SCALE); ctx.stroke(); }
+  // roundness guide: a stepped line on each side, so a row is no deeper than the head is wide in the front view
+  ctx.strokeStyle = '#9ccfd8'; ctx.lineWidth = 2;
+  let prev = null;
+  for (let y = HEAD_ROWS[0]; y <= HEAD_ROWS[1]; y++) {
+    const run = headRun(window.views.front[y], 15);
+    if (!run) continue;
+    const w = run[1] - run[0] + 1, l = SIDE_CENTRE - Math.floor(w / 2), r = l + w;
+    ctx.beginPath();
+    for (const x of [l, r]) { ctx.moveTo(x * SCALE, y * SCALE); ctx.lineTo(x * SCALE, (y + 1) * SCALE); }
+    if (prev) { ctx.moveTo(prev[0] * SCALE, y * SCALE); ctx.lineTo(l * SCALE, y * SCALE); ctx.moveTo(prev[1] * SCALE, y * SCALE); ctx.lineTo(r * SCALE, y * SCALE); }
+    else { ctx.moveTo(l * SCALE, y * SCALE); ctx.lineTo(r * SCALE, y * SCALE); }
+    ctx.stroke();
+    prev = [l, r];
+  }
+  if (prev) { ctx.beginPath(); ctx.moveTo(prev[0] * SCALE, (HEAD_ROWS[1] + 1) * SCALE); ctx.lineTo(prev[1] * SCALE, (HEAD_ROWS[1] + 1) * SCALE); ctx.stroke(); }
+  ctx.restore();
+};
+const draw = () => {
+  for (const [v] of VIEWS) {
+    const c = canvases[v], ctx = c.getContext('2d'), grid = window.views[v];
+    ctx.fillStyle = light ? '#f2e9e1' : '#191724';
+    ctx.fillRect(0, 0, c.width, c.height);
+    grid.forEach((row, y) => row.forEach((ch, x) => { if (ch !== '.') { ctx.fillStyle = palette[ch]; ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE); } }));
+    ctx.strokeStyle = light ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= N; i++) {
+      ctx.beginPath(); ctx.moveTo(i * SCALE + 0.5, 0); ctx.lineTo(i * SCALE + 0.5, N * SCALE); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * SCALE + 0.5); ctx.lineTo(N * SCALE, i * SCALE + 0.5); ctx.stroke();
+    }
+    // brighter guide lines every 4 rows and columns, identical in all three views
+    ctx.strokeStyle = light ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.22)';
+    for (let i = 0; i <= N; i += 4) {
+      ctx.beginPath(); ctx.moveTo(i * SCALE + 0.5, 0); ctx.lineTo(i * SCALE + 0.5, N * SCALE); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * SCALE + 0.5); ctx.lineTo(N * SCALE, i * SCALE + 0.5); ctx.stroke();
+    }
+    if (guide && v === 'side') drawGuide(ctx);
+    if (gillGuide && v === 'side') drawGillGuide(ctx);
+    if (faceGuide && v === 'side') drawFaceGuide(ctx);
+    if (freckleGuide) drawFreckleGuide(ctx, v);
+    if (centerGuide && v !== 'side') drawCenterGuide(ctx);
+    if (underGuide && isBackView(v)) drawUnderGuide(ctx);
+    if (tailGuide && isBackView(v)) drawTailGuide(ctx);
+    if (headOutline && v !== 'side') drawHeadOutline(ctx);
+    if (refOutline && refOutlineRows) {
+      ctx.save(); ctx.strokeStyle = '#f6c177'; ctx.lineWidth = 2;
+      refOutlineRows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === 'o') ctx.strokeRect(x * SCALE + 3, y * SCALE + 3, SCALE - 6, SCALE - 6); }));
+      ctx.restore();
+    }
+    if (columnGuide && COLUMNS[v]) {
+      ctx.save(); ctx.fillStyle = 'rgba(156, 207, 216, 0.3)'; ctx.strokeStyle = '#9ccfd8'; ctx.lineWidth = 2;
+      for (const x of COLUMNS[v]) { ctx.fillRect(x * SCALE, 0, SCALE, N * SCALE); ctx.strokeRect(x * SCALE + 1, 1, SCALE - 2, N * SCALE - 2); }
+      ctx.restore();
+    }
+    ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 2;
+    for (const [x, y] of window.marks[v]) ctx.strokeRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4);
+    const p = previews[v].getContext('2d');
+    p.fillStyle = light ? '#f2e9e1' : '#191724'; p.fillRect(0, 0, N, N);
+    grid.forEach((row, y) => row.forEach((ch, x) => { if (ch !== '.') { p.fillStyle = palette[ch]; p.fillRect(x, y, 1, 1); } }));
+  }
+  const ch = window.changes();
+  const lines = VIEWS.flatMap(([v]) => [
+    ...ch[v].map(([x, y, c]) => `${v} (${x}, ${y}) → ${c === '.' ? 'empty' : NAMES[c]}`),
+    ...window.marks[v].map(([x, y]) => `${v} (${x}, ${y}) marked`),
+  ]);
+  document.getElementById('list').textContent = lines.length ? lines.join('\n') : 'none';
+};
+
+const cellAt = (c, e) => { const r = c.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / r.width * N), Math.floor((e.clientY - r.top) / r.height * N)]; };
+const apply = (v, [x, y], toggle) => {
+  if (x < 0 || y < 0 || x >= N || y >= N) return;
+  if (tool === 'mark') {
+    if (!toggle) return;
+    const m = window.marks[v], i = m.findIndex(([mx, my]) => mx === x && my === y);
+    if (i >= 0) m.splice(i, 1); else m.push([x, y]);
+  } else window.views[v][y][x] = tool;
+  draw();
+};
+
+const toolsEl = document.getElementById('tools');
+const setTool = t => { tool = t; toolsEl.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.t === t)); };
+const addTool = (t, label, swClass, colour) => {
+  const b = document.createElement('button'); b.className = 'tool'; b.dataset.t = t;
+  const sw = document.createElement('span'); sw.className = 'sw ' + swClass; if (colour) sw.style.background = colour;
+  b.append(sw, label); b.onclick = () => setTool(t); toolsEl.appendChild(b);
+};
+document.getElementById('reset').onclick = () => { for (const [v] of VIEWS) { window.views[v] = original[v].map(r => [...r]); window.marks[v] = []; } draw(); };
+document.getElementById('centerGuide').onclick = e => { centerGuide = !centerGuide; e.target.textContent = centerGuide ? 'Hide center line' : 'Show center line'; draw(); };
+document.getElementById('tailGuide').onclick = e => { tailGuide = !tailGuide; e.target.textContent = tailGuide ? 'Hide side tail on back' : 'Show side tail on back'; draw(); };
+const refButton = document.getElementById('refOutline');
+if (OUTLINE_FILE) fetch(OUTLINE_FILE, { cache: 'no-store' }).then(r => r.text()).then(t => { refOutlineRows = t.split('\n').filter(l => l && !/^\S=#/.test(l)); refButton.hidden = false; });
+refButton.onclick = e => { refOutline = !refOutline; e.target.textContent = refOutline ? 'Hide reference outline' : 'Show reference outline'; draw(); };
+const columnButton = document.getElementById('columnGuide');
+columnButton.hidden = !Object.keys(COLUMNS).length;
+columnButton.onclick = e => { columnGuide = !columnGuide; e.target.textContent = columnGuide ? 'Hide column guide' : 'Show column guide'; draw(); };
+document.getElementById('headOutline').onclick = e => { headOutline = !headOutline; e.target.textContent = headOutline ? 'Hide head outline' : 'Show head outline'; draw(); };
+document.getElementById('underGuide').onclick = e => { underGuide = !underGuide; e.target.textContent = underGuide ? 'Hide body under tail' : 'Show body under tail'; draw(); };
+document.getElementById('freckleGuide').onclick = e => { freckleGuide = !freckleGuide; e.target.textContent = freckleGuide ? 'Hide freckle guide' : 'Show freckle guide'; draw(); };
+document.getElementById('faceGuide').onclick = e => { faceGuide = !faceGuide; e.target.textContent = faceGuide ? 'Hide face guide' : 'Show face guide'; draw(); };
+document.getElementById('gillGuide').onclick = e => { gillGuide = !gillGuide; e.target.textContent = gillGuide ? 'Hide gill clearance' : 'Show gill clearance'; draw(); };
+document.getElementById('guide').onclick = e => { guide = !guide; e.target.textContent = guide ? 'Hide head clearance' : 'Show head clearance'; draw(); };
+document.getElementById('bg').onclick = e => { light = !light; e.target.textContent = light ? 'Dark background' : 'Light background'; draw(); };
+
+const parse = text => {
+  const rows = [];
+  for (const line of text.split('\n').filter(Boolean)) {
+    const m = line.match(/^(\S)=(#[0-9a-fA-F]{6})$/);
+    if (m) palette[m[1]] = palette[m[1]] ?? m[2]; else rows.push(line.split(''));
+  }
+  return rows;
+};
+
+Promise.all(['front', 'side'].map(v => fetch('views/' + v + '.txt', { cache: 'no-store' }).then(r => r.text()).then(t => { REF[v] = t.split('\n').filter(l => l && !/^\S=#/.test(l)).map(r => r.split('')); }))).then(() => Promise.all(VIEWS.map(([, f]) => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
+  VIEWS.forEach(([v], i) => {
+    original[v] = parse(texts[i]);
+    window.views[v] = original[v].map(r => [...r]);
+    window.marks[v] = [];
+    const wrap = document.createElement('div'); wrap.className = 'view';
+    const h = document.createElement('h2'); h.textContent = v;
+    const c = document.createElement('canvas'); c.width = c.height = N * SCALE;
+    c.addEventListener('pointerdown', e => { painting = v; c.setPointerCapture(e.pointerId); apply(v, cellAt(c, e), true); });
+    c.addEventListener('pointermove', e => { if (painting === v && tool !== 'mark') apply(v, cellAt(c, e), false); });
+    c.addEventListener('pointerup', () => { painting = null; });
+    wrap.append(h, c); document.getElementById('views').appendChild(wrap); canvases[v] = c;
+    const p = document.createElement('canvas'); p.width = p.height = N; p.style.width = p.style.height = '64px';
+    document.getElementById('previews').appendChild(p); previews[v] = p;
+  });
+  // one swatch per colour: letters that share a colour (eye = outline) get a single tool
+  addTool('mark', 'Mark', 'mark');
+  const seen = new Set();
+  for (const [k, name] of Object.entries(NAMES)) {
+    if (!palette[k] || seen.has(palette[k])) continue;
+    seen.add(palette[k]);
+    addTool(k, name, '', palette[k]);
+  }
+  // colours in the loaded files that have no name above get a tool labelled with their colour
+  for (const [k, colour] of Object.entries(palette)) {
+    if (k in NAMES || seen.has(colour)) continue;
+    seen.add(colour);
+    addTool(k, colour, '', colour);
+  }
+  addTool('.', 'Erase', 'erase');
+  setTool('mark');
+  draw();
+}));
+</script>
+</body>
+</html>

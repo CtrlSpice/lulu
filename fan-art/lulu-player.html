@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lulu wave</title>
+<style>
+  body { background: #232136; color: #e0def4; font: 14px ui-monospace, monospace; margin: 24px; }
+  .row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; }
+  figure { margin: 0 0 28px; }
+  figcaption { margin-bottom: 8px; color: #908caa; }
+  canvas { image-rendering: pixelated; display: block; }
+  .pair { display: flex; gap: 16px; align-items: flex-start; }
+  button { font: inherit; padding: 6px 14px; background: #393552; color: #e0def4; border: 1px solid #6e6a86; border-radius: 6px; cursor: pointer; }
+  label { margin-left: 16px; }
+</style>
+<p>
+  <button id="play">Play</button>
+  <label>Speed <input id="speed" type="range" min="0.5" max="2" step="0.25" value="1"> <span id="x">1</span>×</label>
+  <label><input id="light" type="checkbox"> Dawn background</label>
+</p>
+<div class="row" id="anims"></div>
+<script>
+// Each animation is a list of [frame file, milliseconds]; an optional third entry is a gill track on its own timer,
+// whose gills replace the body frame's gills (1 px lower on the breath frame, where the head dips).
+const ANIMS = [
+  ['Lulu 1 and 2', [['lulu-1.txt', 200], ['lulu-2.txt', 200]]],
+  ['Lulu 1 and 2, slower', [['lulu-1.txt', 350], ['lulu-2.txt', 350]]],
+];
+const SCALE = 8, SMALL = 3;
+const parse = t => {
+  const lines = t.split('\n').filter(Boolean);
+  const pal = Object.fromEntries(lines.filter(l => /^\S=#/.test(l)).map(l => [l[0], l.slice(2)]));
+  return { pal, rows: lines.filter(l => !/^\S=#/.test(l)) };
+};
+const paint = (ctx, g, s, bg) => {
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 32 * s, 32 * s);
+  g.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== '.') { ctx.fillStyle = g.pal[c]; ctx.fillRect(x * s, y * s, s, s); } }));
+};
+const files = [...new Set(ANIMS.flatMap(([, f, g = []]) => [...f, ...g].map(([n]) => n)))];
+const near = (g, x, y, set) => [-1, 0, 1].some(dy => [-1, 0, 1].some(dx => set.includes(g[y + dy]?.[x + dx])));
+const isGill = (g, x, y) => (x <= 7 || x >= 24) && y <= 20 && ('gG'.includes(g[y][x]) || (g[y][x] === 'o' && near(g, x, y, 'gG') && !near(g, x, y, 'bsew')));
+const compose = (body, gills, dy) => {
+  const b = body.rows.map(r => [...r]), gl = gills.rows;
+  b.forEach((r, y) => r.forEach((c, x) => { if (isGill(body.rows, x, y)) r[x] = '.'; }));
+  gl.forEach((r, y) => [...r].forEach((c, x) => { if (isGill(gl, x, y) && b[y + dy] && b[y + dy][x] === '.') b[y + dy][x] = c; }));
+  return { pal: body.pal, rows: b.map(r => r.join('')) };
+};
+Promise.all(files.map(f => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
+  const grids = Object.fromEntries(files.map((f, i) => [f, parse(texts[i])]));
+  const bg = () => document.getElementById('light').checked ? '#f2e9e1' : '#232136';
+  const anims = ANIMS.map(([title, frames, gillFrames]) => {
+    const fig = document.createElement('figure');
+    fig.innerHTML = `<figcaption>${title}</figcaption>`;
+    const big = document.createElement('canvas'); big.width = big.height = 32 * SCALE;
+    const small = document.createElement('canvas'); small.width = small.height = 32 * SMALL;
+    const pair = document.createElement('div'); pair.className = 'pair'; pair.append(big, small);
+    fig.append(pair);
+    document.getElementById('anims').append(fig);
+    const gill = gillFrames && { frames: gillFrames, i: 0, timer: null };
+    return { frames, big, small, i: 0, timer: null, gill };
+  });
+  const show = a => {
+    const f = a.frames[a.i][0];
+    const g = a.gill ? compose(grids[f], grids[a.gill.frames[a.gill.i][0]], f.includes('breathe') ? 1 : 0) : grids[f]; paint(a.big.getContext('2d'), g, SCALE, bg()); paint(a.small.getContext('2d'), g, SMALL, bg()); };
+  const speed = () => +document.getElementById('speed').value;
+  const tick = (track, a) => { track.timer = setTimeout(() => { track.i = (track.i + 1) % track.frames.length; show(a); tick(track, a); }, track.frames[track.i][1] / speed()); };
+  let playing = false;
+  document.getElementById('play').onclick = e => {
+    playing = !playing; e.target.textContent = playing ? 'Pause' : 'Play';
+    anims.forEach(a => [a, a.gill].filter(Boolean).forEach(t => { clearTimeout(t.timer); if (playing) tick(t, a); }));
+  };
+  document.getElementById('speed').oninput = e => { document.getElementById('x').textContent = e.target.value; };
+  document.getElementById('light').onchange = () => anims.forEach(show);
+  anims.forEach(show);
+});
+</script>

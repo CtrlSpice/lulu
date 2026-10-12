@@ -1,0 +1,80 @@
+{
+  "image": "wave-breath.png",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 6,
+  "frames": [
+    {
+      "frame": 0,
+      "ms": 900
+    },
+    {
+      "frame": 1,
+      "ms": 250
+    },
+    {
+      "frame": 2,
+      "ms": 160
+    },
+    {
+      "frame": 3,
+      "ms": 160
+    },
+    {
+      "frame": 4,
+      "ms": 500
+    },
+    {
+      "frame": 3,
+      "ms": 160
+    },
+    {
+      "frame": 2,
+      "ms": 160
+    },
+    {
+      "frame": 1,
+      "ms": 250
+    },
+    {
+      "frame": 0,
+      "ms": 900
+    },
+    {
+      "frame": 1,
+      "ms": 250
+    },
+    {
+      "frame": 2,
+      "ms": 160
+    },
+    {
+      "frame": 3,
+      "ms": 160
+    },
+    {
+      "frame": 4,
+      "ms": 500
+    },
+    {
+      "frame": 3,
+      "ms": 160
+    },
+    {
+      "frame": 2,
+      "ms": 160
+    },
+    {
+      "frame": 1,
+      "ms": 250
+    },
+    {
+      "frame": 0,
+      "ms": 550
+    },
+    {
+      "frame": 5,
+      "ms": 150
+    }
+  ]
+}

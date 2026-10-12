@@ -1,0 +1,13 @@
+{
+  "wave-breath": [
+    ["idle/front-open.txt", 900], ["idle/gills/down-out.txt", 250],
+    ["idle/gills/down-in.txt", 160], ["idle/gills/down-in-top-mid.txt", 160], ["idle/gills/down-in-all.txt", 500],
+    ["idle/gills/down-in-top-mid.txt", 160], ["idle/gills/down-in.txt", 160], ["idle/gills/down-out.txt", 250],
+    ["idle/front-open.txt", 900], ["idle/gills/down-out.txt", 250],
+    ["idle/gills/down-in.txt", 160], ["idle/gills/down-in-top-mid.txt", 160], ["idle/gills/down-in-all.txt", 500],
+    ["idle/gills/down-in-top-mid.txt", 160], ["idle/gills/down-in.txt", 160], ["idle/gills/down-out.txt", 250],
+    ["idle/front-open.txt", 550], ["idle/front-blink.txt", 150]
+  ],
+  "wag": [["tail/walk/curl-flipped.txt", 250], ["tail/walk/curl-yours.txt", 250]],
+  "blink": [["idle/front-open.txt", 2400], ["idle/front-blink.txt", 150]]
+}

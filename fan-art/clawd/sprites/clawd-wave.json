@@ -1,0 +1,24 @@
+{
+  "image": "clawd-wave.png",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 4,
+  "frames": [
+    {
+      "frame": 0,
+      "ms": 150
+    },
+    {
+      "frame": 1,
+      "ms": 150
+    },
+    {
+      "frame": 2,
+      "ms": 150
+    },
+    {
+      "frame": 3,
+      "ms": 150
+    }
+  ]
+}

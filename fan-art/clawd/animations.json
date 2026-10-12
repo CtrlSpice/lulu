@@ -1,0 +1,4 @@
+{
+  "clawd-wave": [["fan-art/clawd/wave-1.txt", 150], ["fan-art/clawd/wave-2.txt", 150], ["fan-art/clawd/wave-3.txt", 150], ["fan-art/clawd/wave-4.txt", 150]],
+  "clawd-blink": [["fan-art/clawd/clawd.txt", 2400], ["fan-art/clawd/blink.txt", 150]]
+}

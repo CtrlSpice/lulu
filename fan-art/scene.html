@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lulu and Clawd</title>
+<style>
+  body { background: #232136; color: #e0def4; font: 14px ui-monospace, monospace; margin: 24px; }
+  canvas { image-rendering: pixelated; display: block; margin-top: 16px; }
+  button { font: inherit; padding: 6px 14px; background: #393552; color: #e0def4; border: 1px solid #6e6a86; border-radius: 6px; cursor: pointer; }
+  label { margin-left: 16px; }
+</style>
+<p>
+  <button id="play">Play</button>
+  <label><input id="light" type="checkbox"> Dawn background</label>
+</p>
+<p style="color:#908caa">Clawd scuttles over a bit and waves, Lulu waves back, he scuttles closer, blinks, bounces (pat me!), scuttles all the way in; Lulu pats his head three times while he squishes and blushes, then he bounces happily and scuttles away with little hearts popping up over him. Play always starts from the beginning.</p>
+<canvas id="scene"></canvas>
+<script>
+const W = 88, H = 32, SCALE = 6;
+const LULU = '../idle/', CLAWD = 'clawd/';
+
+// Lulu: breathing, with the wave breath and a blink
+const WAVE = [['front-open.txt', 900], ['gills/down-out.txt', 250], ['gills/down-in.txt', 160], ['gills/down-in-top-mid.txt', 160], ['gills/down-in-all.txt', 500], ['gills/down-in-top-mid.txt', 160], ['gills/down-in.txt', 160], ['gills/down-out.txt', 250]];
+const lulu = ([f, ms]) => ({ file: f.startsWith('lulu-') ? f : LULU + f, ms, x: 0 });
+
+// the story, with times in ms from Play
+const FAR = 56, BIT = 46, MOST = 22, CLOSE = 16; // Clawd's grid position; at CLOSE his head is under Lulu's hand
+const START = 800;                                // apart, before he sets off
+const CLAWD_WAVE_START = START + (FAR - BIT) * 100, CLAWD_WAVE = 6 * 180;
+const LULU_WAVE = 250 + 3 * 400 + 400;           // lift, three flicks, arm down
+const BOUNCE = 150, BOUNCES = 2;                 // "pat me": up, down, up, down
+const ARRIVE = CLAWD_WAVE_START + CLAWD_WAVE + LULU_WAVE + (BIT - MOST) * 100 + 600 + 150 + 500 + BOUNCES * 2 * BOUNCE + 300 + (MOST - CLOSE) * 100;
+const PAT_START = ARRIVE + 500, PAT = 300;       // each pat: hand up, then hand down on his head
+
+// Lulu: waits, waves back once Clawd has waved, breathes while he comes over, pats his head three times, then breathes and blinks forever
+const luluWaveDone = CLAWD_WAVE_START + CLAWD_WAVE + LULU_WAVE, breaths = 2 * 2540;
+const luluIntro = [['front-open.txt', CLAWD_WAVE_START + CLAWD_WAVE], ['lulu-2.txt', 250], ...[0, 1, 2].flatMap(() => [['lulu-3.txt', 200], ['lulu-2.txt', 200]]), ['lulu-1.txt', 400],
+  ...WAVE, ...WAVE, ['front-open.txt', PAT_START - luluWaveDone - breaths],
+  ...[0, 1, 2].flatMap(() => [['lulu-pat-1.txt', PAT], ['lulu-pat-2.txt', PAT]]), ['lulu-pat-1.txt', PAT]].map(lulu);
+const luluLoop = [...WAVE, ...WAVE, ['front-open.txt', 550], ['front-blink.txt', 150]].map(lulu);
+
+// Clawd
+const clawdTrack = [];
+const hold = (f, ms, x, y = 0) => clawdTrack.push({ file: CLAWD + f, ms, x, y });   // y < 0 lifts him off the ground
+const scuttle = (from, to) => { const dir = Math.sign(to - from); for (let x = from, i = 0; x !== to; x += dir, i++) hold(i % 2 ? 'step-b.txt' : 'step-a.txt', 100, x); };
+hold('clawd.txt', START, FAR);                                                              // apart
+scuttle(FAR, BIT);                                                                          // over a bit
+for (let i = 0; i < 3; i++) { hold('wave-4.txt', 180, BIT); hold('wave-2.txt', 180, BIT); }   // Clawd waves
+hold('clawd.txt', LULU_WAVE, BIT);                                                          // Lulu waves back
+scuttle(BIT, MOST);                                                                         // more of the way
+hold('clawd.txt', 600, MOST); hold('blink.txt', 150, MOST); hold('clawd.txt', 500, MOST);  // pause, blink
+for (let i = 0; i < BOUNCES; i++) { hold('squish-2.txt', BOUNCE, MOST); hold('clawd.txt', BOUNCE, MOST); }  // bounces: pat me!
+hold('clawd.txt', 300, MOST);
+scuttle(MOST, CLOSE);                                                                       // all the way over
+hold('clawd.txt', 500, CLOSE);                                                           // smooshes 1 px
+// each pat squishes him 1 px down and he springs back up; his blush builds from blush 1 to blush 2 and stays there
+// from the first pat until he lands from the jump his eyes are happily closed (n_n)
+const PATS = [['clawd-nn.txt', 'squish-2-blush-1.txt'], ['blush-1-nn.txt', 'squish-2-blush-2.txt'], ['blush-2-nn.txt', 'squish-2-blush-2.txt']]; // [hand up: full height, hand down: squished]
+for (const [up, down] of PATS) { hold(up, PAT, CLOSE); hold(down, PAT, CLOSE); }
+hold('blush-2-nn.txt', PAT, CLOSE);        // the third pat finishes: her hand lifts, he is back up, blushing
+for (let i = 0; i < 2; i++) { hold('squish-2-blush-2.txt', BOUNCE, CLOSE); hold('blush-2-nn.txt', BOUNCE, CLOSE); }  // bounces in place, happy
+hold('blush-2.txt', 300, CLOSE);           // eyes open again, still blushing
+const AWAY = 60;
+for (let x = CLOSE, i = 0; x !== AWAY; x++, i++) hold(i % 2 ? 'step-b-blush.txt' : 'step-a-blush.txt', 100, x);  // and scuttles away, still blushing
+hold('blush-2.txt', Infinity, AWAY);
+// hearts pop up once he has cleared Lulu (his arms start right of her gill, column 31) and follow him for a dozen steps
+const CLEAR = 24, LEAVING = clawdTrack.findLastIndex(step => step.x === CLOSE);   // his last step beside her, before he scuttles away
+const HEARTS_FROM = clawdTrack.findIndex((step, i) => i > LEAVING && step.x >= CLEAR);
+clawdTrack.slice(HEARTS_FROM, HEARTS_FROM + 12).forEach((step, i) => { step.hearts = i; });
+
+// tiny hearts in gill pink: small (3 x 3) and full (5 x 4)
+const HEART = { small: ['g.g', 'ggg', '.g.'], big: ['.g.g.', 'ggggg', '.gGg.', '..G..'] };
+// each heart: when it appears (tick), where relative to the top centre of Clawd's head, and it rises 1 px per tick for 6 ticks
+const HEARTS = [{ at: 0, dx: -5, dy: -3 }, { at: 2, dx: 3, dy: -2 }, { at: 4, dx: -1, dy: -5 }, { at: 6, dx: 5, dy: -3 }];
+
+const parse = t => { const l = t.split('\n').filter(Boolean); return { pal: Object.fromEntries(l.filter(x => /^\S=#/.test(x)).map(x => [x[0], x.slice(2)])), rows: l.filter(x => !/^\S=#/.test(x)) }; };
+const files = [...new Set([...luluIntro, ...luluLoop, ...clawdTrack].map(s => s.file))];
+Promise.all(files.map(f => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
+  const grids = Object.fromEntries(files.map((f, i) => [f, parse(texts[i])]));
+  const canvas = document.getElementById('scene'); canvas.width = W * SCALE; canvas.height = H * SCALE;
+  const ctx = canvas.getContext('2d');
+  // a track plays its intro once, then its loop forever; a step lasting Infinity ends the track there
+const tracks = [{ intro: clawdTrack, loop: [] }, { intro: luluIntro, loop: luluLoop }].map(t => ({ ...t, i: 0, timer: null }));
+const stepOf = t => t.i < t.intro.length ? t.intro[t.i] : t.loop[(t.i - t.intro.length) % t.loop.length];
+  const paint = (g, ox, oy = 0) => g.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== '.' && x + ox < W) { ctx.fillStyle = g.pal[c]; ctx.fillRect((x + ox) * SCALE, (y + oy) * SCALE, SCALE, SCALE); } }));
+  const draw = () => {
+    ctx.fillStyle = document.getElementById('light').checked ? '#f2e9e1' : '#232136'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (const t of tracks) { const s = stepOf(t); paint(grids[s.file], s.x, s.y); }
+    const c = stepOf(tracks[0]);
+    if (c.hearts !== undefined) for (const h of HEARTS) {
+      const age = c.hearts - h.at; if (age < 0 || age > 5) continue;
+      const shape = age === 0 || age === 5 ? HEART.small : HEART.big;
+      const left = c.x + 16 + h.dx - Math.floor(shape[0].length / 2), top = 19 + (c.y || 0) + h.dy - age - shape.length;
+      shape.forEach((r, y) => [...r].forEach((ch, x) => { if (ch !== '.') { ctx.fillStyle = ch === 'g' ? '#eb6f92' : '#cf5080'; ctx.fillRect((left + x) * SCALE, (top + y) * SCALE, SCALE, SCALE); } }));
+    }
+  };
+  const tick = t => { const ms = stepOf(t).ms; if (ms === Infinity) return; t.timer = setTimeout(() => { t.i++; draw(); tick(t); }, ms); };
+  let playing = false;
+  document.getElementById('play').onclick = e => { playing = !playing; e.target.textContent = playing ? 'Pause' : 'Play'; tracks.forEach(t => { clearTimeout(t.timer); if (playing) { t.i = 0; tick(t); } }); draw(); };
+  document.getElementById('light').onchange = draw;
+  draw();
+});
+</script>

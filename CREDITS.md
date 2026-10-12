@@ -4,6 +4,10 @@
 
 The pixel-art Lulu in this repository (sprites, turnaround views, experiments and the progress history) is dedicated to the public domain under [CC0 1.0](LICENSE). Use her, change her and share her however you like; no credit is required.
 
+## Clawd (fan art)
+
+`fan-art/clawd/` and the animations in `fan-art/` that include him are unofficial fan art of Clawd, the Claude Code mascot, which belongs to Anthropic. They are not covered by CC0 and are not affiliated with or endorsed by Anthropic. See [fan-art/README.md](fan-art/README.md).
+
 Lulu Axol'Otel was created for the [OTel Desktop Viewer](https://github.com/CtrlSpice/otel-desktop-viewer) project. The character, idea and pose are the project's own; the pixel art was drawn for the project.
 
 ## Original painting
