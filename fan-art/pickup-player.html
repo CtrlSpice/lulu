@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lulu picks up Clawd</title>
+<style>
+  body { background: #232136; color: #e0def4; font: 14px ui-monospace, monospace; margin: 24px; }
+  canvas { image-rendering: pixelated; display: block; margin-top: 16px; }
+  button { font: inherit; padding: 6px 14px; background: #393552; color: #e0def4; border: 1px solid #6e6a86; border-radius: 6px; cursor: pointer; }
+</style>
+<p><button id="play">Play</button> pickup → pickup-2 → boost (held) → pickup-2 → pickup, looping.</p>
+<canvas id="c"></canvas>
+<script>
+const SCALE = 8, SEQ = [['lulu-pickup.txt', 600], ['lulu-pickup-2.txt', 350], ['lulu-boost.txt', 1400], ['lulu-pickup-2.txt', 350], ['lulu-pickup.txt', 600]];
+const parse = t => { const l = t.split('\n').filter(Boolean); return { pal: Object.fromEntries(l.filter(x => /^\S=#/.test(x)).map(x => [x[0], x.slice(2)])), rows: l.filter(x => !/^\S=#/.test(x)) }; };
+const files = [...new Set(SEQ.map(([f]) => f))];
+Promise.all(files.map(f => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
+  const grids = Object.fromEntries(files.map((f, i) => [f, parse(texts[i])]));
+  const g0 = grids[files[0]], c = document.getElementById('c'), ctx = c.getContext('2d');
+  c.width = g0.rows[0].length * SCALE; c.height = g0.rows.length * SCALE;
+  let i = 0, timer = null;
+  const show = () => { const g = grids[SEQ[i][0]]; ctx.fillStyle = '#191724'; ctx.fillRect(0, 0, c.width, c.height); g.rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch !== '.') { ctx.fillStyle = g.pal[ch]; ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE); } })); };
+  const tick = () => { timer = setTimeout(() => { i = (i + 1) % SEQ.length; show(); tick(); }, SEQ[i][1]); };
+  document.getElementById('play').onclick = e => { if (timer) { clearTimeout(timer); timer = null; e.target.textContent = 'Play'; } else { tick(); e.target.textContent = 'Pause'; } };
+  show();
+});
+</script>

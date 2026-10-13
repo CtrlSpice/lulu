@@ -22,6 +22,7 @@
   .sw { width: 16px; height: 16px; border-radius: 3px; border: 1px solid #0008; flex: none; }
   .sw.erase { background: repeating-conic-gradient(#888 0 25%, #ccc 0 50%) 0 0 / 8px 8px; }
   .sw.mark { background: transparent; border: 2px solid #00e5ff; }
+  .sw.select { background: transparent; border: 2px dashed #ff4fd8; }
   .previews { display: flex; gap: 8px; align-items: flex-end; }
   #list { white-space: pre-wrap; color: var(--foam); font-size: 12px; max-height: 240px; overflow: auto; }
 </style>
@@ -61,6 +62,7 @@ const COLUMNS = Object.fromEntries((params.get('columns') ?? '').split(',').filt
 const [OUTLINE_FILE, OUTLINE_SHIFT = '0'] = (params.get('outline') ?? '').split('@');
 let refOutlineRows = null;
 const NAMES = { o: 'outline', s: 'skin shadow', b: 'skin', g: 'gill', G: 'gill shadow', w: 'eye shine', e: 'eye' };
+let strokeColour = '.';
 let palette = {}, light = false, tool = 'mark', painting = null, centerGuide = false, columnGuide = false, refOutline = false;
 const original = {};
 window.views = {};   // current pixel rows per view, including painted changes
@@ -99,6 +101,11 @@ const draw = () => {
     }
     ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 2;
     for (const [x, y] of window.marks[v]) ctx.strokeRect(x * SCALE + 2, y * SCALE + 2, SCALE - 4, SCALE - 4);
+    if (selection?.v === v) {
+      ctx.save(); ctx.strokeStyle = '#ff4fd8'; ctx.lineWidth = 2; ctx.setLineDash([3, 2]);
+      for (const [x, y] of selection.cells) ctx.strokeRect(x * SCALE + 1, y * SCALE + 1, SCALE - 2, SCALE - 2);
+      ctx.restore();
+    }
     const p = previews[v].getContext('2d');
     p.fillStyle = light ? '#f2e9e1' : '#191724'; p.fillRect(0, 0, w, h);
     grid.forEach((row, y) => row.forEach((ch, x) => { if (ch !== '.') { p.fillStyle = palette[ch]; p.fillRect(x, y, 1, 1); } }));
@@ -112,6 +119,33 @@ const draw = () => {
 };
 
 const cellAt = (v, c, e) => { const r = c.getBoundingClientRect(), { w, h } = size(v); return [Math.floor((e.clientX - r.left) / r.width * w), Math.floor((e.clientY - r.top) / r.height * h)]; };
+// Select tool: drag a rectangle to select its coloured pixels, then move them 1 px at a time with the arrow keys; Esc deselects.
+// Moving carries the pixels over the grid without destroying what they pass over: each spot remembers what was under it.
+let selection = null, selectStart = null;   // selection: { v, cells: [[x, y, colour]], under: Map("x,y" -> what was there) }
+const selectRect = (v, [x0, y0], [x1, y1]) => {
+  const g = window.views[v], cells = [];
+  for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) for (let x = Math.min(x0, x1); x <= Math.max(x0, x1); x++)
+    if (g[y]?.[x] && g[y][x] !== '.') cells.push([x, y, g[y][x]]);
+  selection = cells.length ? { v, cells, under: new Map(cells.map(([x, y]) => [x + ',' + y, '.'])) } : null;
+};
+const moveSelection = (dx, dy) => {
+  if (!selection) return;
+  const g = window.views[selection.v], { w, h } = size(selection.v);
+  if (selection.cells.some(([x, y]) => x + dx < 0 || y + dy < 0 || x + dx >= w || y + dy >= h)) return;   // stop at the edge
+  for (const [x, y] of selection.cells) g[y][x] = selection.under.get(x + ',' + y);                        // put back what was under
+  const under = new Map();
+  const moved = selection.cells.map(([x, y, c]) => [x + dx, y + dy, c]);
+  for (const [x, y] of moved) under.set(x + ',' + y, g[y][x]);
+  for (const [x, y, c] of moved) g[y][x] = c;
+  selection = { ...selection, cells: moved, under };
+  draw();
+};
+addEventListener('keydown', e => {
+  if (!selection) return;
+  const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+  if (d) { e.preventDefault(); moveSelection(...d); }
+  else if (e.key === 'Escape') { selection = null; draw(); }
+});
 const apply = (v, [x, y], toggle) => {
   const { w, h } = size(v);
   if (x < 0 || y < 0 || x >= w || y >= h) return;
@@ -119,19 +153,22 @@ const apply = (v, [x, y], toggle) => {
     if (!toggle) return;
     const m = window.marks[v], i = m.findIndex(([mx, my]) => mx === x && my === y);
     if (i >= 0) m.splice(i, 1); else m.push([x, y]);
-  } else window.views[v][y][x] = tool;
+  } else {
+    if (toggle) strokeColour = tool !== '.' && window.views[v][y][x] === tool ? '.' : tool;   // first pixel of a stroke: clicking a pixel of this colour switches it off
+    window.views[v][y][x] = strokeColour;
+  }
   draw();
 };
 
 const toolsEl = document.getElementById('tools');
-const setTool = t => { tool = t; toolsEl.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.t === t)); };
+const setTool = t => { tool = t; if (t !== 'select') selection = null; toolsEl.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.t === t)); };
 const addTool = (t, label, swClass, colour) => {
   const b = document.createElement('button'); b.className = 'tool'; b.dataset.t = t;
   const sw = document.createElement('span'); sw.className = 'sw ' + swClass; if (colour) sw.style.background = colour;
   b.append(sw, label); b.onclick = () => setTool(t); toolsEl.appendChild(b);
 };
 const toggle = (id, show, hide, flip) => { document.getElementById(id).onclick = e => { const on = flip(); e.target.textContent = on ? hide : show; draw(); }; };
-document.getElementById('reset').onclick = () => { for (const [v] of VIEWS) { window.views[v] = original[v].map(r => [...r]); window.marks[v] = []; } draw(); };
+document.getElementById('reset').onclick = () => { selection = null; for (const [v] of VIEWS) { window.views[v] = original[v].map(r => [...r]); window.marks[v] = []; } draw(); };
 toggle('bg', 'Light background', 'Dark background', () => (light = !light));
 toggle('centerGuide', 'Show center line', 'Hide center line', () => (centerGuide = !centerGuide));
 toggle('columnGuide', 'Show column guide', 'Hide column guide', () => (columnGuide = !columnGuide));
@@ -157,8 +194,16 @@ Promise.all(VIEWS.map(([, f]) => fetch(f, { cache: 'no-store' }).then(r => r.tex
     const wrap = document.createElement('div'); wrap.className = 'view';
     const title = document.createElement('h2'); title.textContent = v;
     const c = document.createElement('canvas'); c.width = w * SCALE; c.height = h * SCALE;
-    c.addEventListener('pointerdown', e => { painting = v; c.setPointerCapture(e.pointerId); apply(v, cellAt(v, c, e), true); });
-    c.addEventListener('pointermove', e => { if (painting === v && tool !== 'mark') apply(v, cellAt(v, c, e), false); });
+    c.addEventListener('pointerdown', e => {
+      painting = v; c.setPointerCapture(e.pointerId);
+      if (tool === 'select') { selectStart = cellAt(v, c, e); selectRect(v, selectStart, selectStart); draw(); }
+      else apply(v, cellAt(v, c, e), true);
+    });
+    c.addEventListener('pointermove', e => {
+      if (painting !== v) return;
+      if (tool === 'select') { selectRect(v, selectStart, cellAt(v, c, e)); draw(); }
+      else if (tool !== 'mark') apply(v, cellAt(v, c, e), false);
+    });
     c.addEventListener('pointerup', () => { painting = null; });
     wrap.append(title, c); document.getElementById('views').appendChild(wrap); canvases[v] = c;
     const p = document.createElement('canvas'); p.width = w; p.height = h; p.style.width = w * 2 + 'px'; p.style.height = h * 2 + 'px';
@@ -166,6 +211,7 @@ Promise.all(VIEWS.map(([, f]) => fetch(f, { cache: 'no-store' }).then(r => r.tex
   });
   // one swatch per colour: letters that share a colour (eye = outline) get a single tool
   addTool('mark', 'Mark', 'mark');
+  addTool('select', 'Select (arrows move, Esc)', 'select');
   const seen = new Set();
   for (const [k, name] of Object.entries(NAMES)) {
     if (!palette[k] || seen.has(palette[k])) continue;

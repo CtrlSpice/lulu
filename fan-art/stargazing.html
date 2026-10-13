@@ -1,0 +1,133 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lulu and Clawd stargazing</title>
+<style>
+  body { background: #232136; color: #e0def4; font: 14px ui-monospace, monospace; margin: 24px; }
+  canvas { image-rendering: pixelated; display: block; margin-top: 16px; max-width: 100%; }
+  button { font: inherit; padding: 6px 14px; background: #393552; color: #e0def4; border: 1px solid #6e6a86; border-radius: 6px; cursor: pointer; }
+</style>
+<p><button id="play">Play</button> Lulu is stargazing. Clawd runs over and asks for uppies, has a look through the telescope, gets set down, scuttles to her side, leans in for head pats, bounces and scuttles off. Play always starts from the beginning.</p>
+<canvas id="scene"></canvas>
+<script>
+const W = 96, H = 48, SCALE = 6, SKY = '#191724';
+const LX = 3, LY = 10;            // Lulu's grid (and the telescope's, which shares it) in the bottom-left corner; her feet on canvas row 40
+const CY = 10;                    // Clawd's grid row offset: his feet on the same ground row as hers
+const LULU = '../idle/', SG = '../stargazing/', CLAWD = 'clawd/';
+
+// ----- Clawd: a list of steps (frame, ms, grid position); "top" draws him in front of everything (while Lulu holds him up)
+const clawdTrack = [];
+let clock = 0;
+const hold = (f, ms, x, y = CY, extra = {}) => { clawdTrack.push({ file: CLAWD + f, ms, x, y, ...extra }); clock += ms; };
+const scuttle = (from, to, a = 'step-a.txt', b = 'step-b.txt', extra = {}, y = CY) => { const d = Math.sign(to - from); for (let x = from, i = 0; x !== to; x += d, i++) hold(i % 2 ? b : a, 90, x, y, extra); };
+const OFF = 92, DOWN = 40, CLOSE = 20, AWAY = 92;   // off-screen right; where he is set down; the head-pat spot
+const FEET = { x: LX, y: CY + 1 };   // at Lulu's feet: his feet line (columns 12-19 of his grid) under hers, 1 row nearer to us, drawn in front of her
+const EYE = { x: 3, y: 1 };       // held up with his right eye at the telescope's eyepiece
+
+hold('clawd.txt', 1500, OFF);                                    // Lulu stargazes alone for a moment
+scuttle(OFF, FEET.x, 'step-a.txt', 'step-b.txt', { top: true }, FEET.y);   // he runs over to her feet, in front of her
+hold('clawd.txt', 400, FEET.x, FEET.y, { top: true });          // arrives at her feet, plain Clawd
+const UPPIES = clock;
+for (let i = 0; i < 2; i++) { hold('squish-2.txt', 160, FEET.x, FEET.y, { top: true }); hold('uppies.txt', 280, FEET.x, FEET.y, { top: true }); }   // bounces up with his arms up, twice: uppies! uppies!
+hold('uppies.txt', 300, FEET.x, FEET.y, { top: true });
+const LIFT = clock;
+const COMBO = [['lulu-pickup-2.txt', 350], ['lulu-boost.txt', 1600], ['lulu-pickup-2.txt', 350], ['lulu-pickup.txt', 400]];   // lift, look, lower, set down
+for (const [, ms] of COMBO) hold('clawd.txt', ms, FEET.x, FEET.y, { hidden: true });
+const SET_DOWN = clock;
+scuttle(FEET.x, CLOSE, 'step-a.txt', 'step-b.txt', {}, FEET.y);   // scuttles off to her side                                            // scuttles off to her side
+const ARRIVE = clock;
+hold('clawd-lean.txt', 500, CLOSE);                              // stops and leans in
+const PAT = 300, PAT_START = clock;
+for (const [up, down] of [['clawd-nn', 'squish-2-blush-1'], ['blush-1-nn', 'squish-2-blush-2'], ['blush-2-nn', 'squish-2-blush-2']]) { hold(up + '-lean.txt', PAT, CLOSE); hold(down + '-lean.txt', PAT, CLOSE); }
+hold('blush-2-nn-lean.txt', PAT, CLOSE);
+const PATS_END = clock;
+hold('blush-2-nn.txt', 200, CLOSE);                              // straightens up
+for (let i = 0; i < 2; i++) { hold('squish-2-blush-2.txt', 150, CLOSE); hold('blush-2-nn.txt', 150, CLOSE); }   // happy bounce
+hold('blush-2.txt', 300, CLOSE);
+const LEAVING = clawdTrack.length;
+scuttle(CLOSE, AWAY, 'step-a-blush.txt', 'step-b-blush.txt');    // and off he goes, blushing
+hold('clawd.txt', Infinity, AWAY);
+// hearts once he is clear of Lulu, for a dozen steps
+const HEARTS_FROM = clawdTrack.findIndex((s, i) => i >= LEAVING && s.x >= CLOSE + 7);
+clawdTrack.slice(HEARTS_FROM, HEARTS_FROM + 12).forEach((s, i) => { s.hearts = i; });
+
+// ----- Lulu: at the telescope; turns to Clawd when he asks for uppies; pats him; then goes back to the telescope
+const lulu = (f, ms, scope) => ({ file: f, ms, scope });
+const luluTrack = [
+  lulu(SG + 'lulu-stargaze.txt', UPPIES, true),
+  lulu(LULU + 'front-open.txt', LIFT - UPPIES, false),
+  ...COMBO.map(([f, ms]) => ({ file: f, ms, combo: true })),
+  lulu(LULU + 'front-open.txt', PAT_START - SET_DOWN, false),
+  ...[0, 1, 2].flatMap(() => [lulu('lulu-pat-1.txt', PAT, false), lulu('lulu-pat-2.txt', PAT, false)]), lulu('lulu-pat-1.txt', PAT, false),
+  lulu(LULU + 'front-open.txt', 1200, false),
+  lulu(SG + 'lulu-stargaze.txt', Infinity, true),
+];
+// her smile and closed eyes over the pats (pixels painted on her pat pose, rows 9-18)
+const faceTrack = [{ file: null, ms: PAT_START - 400 }, { file: 'lulu-smile-1.txt', ms: 200 }, { file: 'lulu-smile-2.txt', ms: PATS_END - PAT_START + 200 }, { file: 'lulu-smile-1.txt', ms: 300 }, { file: null, ms: Infinity }];
+const eyesTrack = [{ file: null, ms: PAT_START }, { file: 'lulu-eyes-closed.txt', ms: PATS_END - PAT_START }, { file: null, ms: Infinity }];
+
+// ----- stars, high in the sky above Lulu's head (the stargazing sky)
+let seed = 7; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const YELLOW = '#f6c177', DEEP = '#ea9d34', SHINE = '#faf4ed';
+const ring = r => [[r, 0], [-r, 0], [0, r], [0, -r]];
+const SHAPES = {
+  dot: { dim: [], dot: [], bright: ring(1) },
+  plus: { dim: [], dot: ring(1), bright: [...ring(1), ...ring(2)] },
+  sparkle: { dim: [[0, 1], [0, -1]], dot: [...ring(1), [0, 2], [0, -2]], bright: [...ring(1), [0, 2], [0, -2], [0, 3], [0, -3], [2, 0], [-2, 0]] },
+};
+const LOOK = ['dim', 'dim', 'dim', 'dot', 'dot', 'bright', 'dot', 'dim', 'dim', 'dim'];
+const stars = [];
+while (stars.length < 6) {
+  const x = 4 + Math.floor(rand() * (W - 8)), y = 4 + Math.floor(rand() * (LY + 1 - 4));
+  if (stars.some(s => Math.abs(s.x - x) < 14)) continue;
+  const k = rand();
+  stars.push({ x, y, colour: rand() < 0.15 ? DEEP : YELLOW, shape: k < 0.3 ? 'dot' : k < 0.65 ? 'plus' : 'sparkle', period: 3500 + rand() * 3500, phase: rand() });
+}
+const HEART = { small: ['g.g', 'ggg', '.g.'], big: ['.g.g.', 'ggggg', '.gGg.', '..G..'] };
+const HEARTS = [{ at: 0, dx: -5, dy: -3 }, { at: 2, dx: 3, dy: -2 }, { at: 4, dx: -1, dy: -5 }, { at: 6, dx: 5, dy: -3 }];
+
+const parse = t => { const l = t.split('\n').filter(Boolean); return { pal: Object.fromEntries(l.filter(x => /^\S=#/.test(x)).map(x => [x[0], x.slice(2)])), rows: l.filter(x => !/^\S=#/.test(x)) }; };
+const files = [...new Set([...clawdTrack, ...luluTrack, ...faceTrack, ...eyesTrack].map(s => s.file).filter(Boolean).concat([SG + 'telescope-placed.txt', 'lulu-pat-1.txt', 'lulu-smile-2.txt', 'lulu-pickup.txt', 'lulu-pickup-2.txt', 'lulu-boost.txt']))];
+Promise.all(files.map(f => fetch(f, { cache: 'no-store' }).then(r => r.text()))).then(texts => {
+  const grids = Object.fromEntries(files.map((f, i) => [f, parse(texts[i])]));
+  const canvas = document.getElementById('scene'); canvas.width = W * SCALE; canvas.height = H * SCALE;
+  const ctx = canvas.getContext('2d');
+  const px = (x, y, c) => { if (x >= 0 && y >= 0 && x < W && y < H) { ctx.fillStyle = c; ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE); } };
+  const paint = (g, ox, oy) => g.rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== '.') px(x + ox, y + oy, g.pal[c]); }));
+  // overlays: the pixels a face frame changes compared with the pose it was painted on
+  const diff = (f, base, y0, y1) => { const b = grids[base].rows, g = grids[f]; return g.rows.flatMap((r, y) => y < y0 || y > y1 ? [] : [...r].flatMap((c, x) => c !== b[y][x] ? [[x, y, g.pal[c]]] : [])); };
+  const FACES = { 'lulu-smile-1.txt': diff('lulu-smile-1.txt', 'lulu-pat-1.txt', 12, 18), 'lulu-smile-2.txt': diff('lulu-smile-2.txt', 'lulu-pat-1.txt', 12, 18), 'lulu-eyes-closed.txt': diff('lulu-eyes-closed.txt', 'lulu-smile-2.txt', 9, 14) };
+  const tracks = [clawdTrack, luluTrack, faceTrack, eyesTrack].map(steps => ({ steps, i: 0, timer: null }));
+  const [C, L, F, E] = tracks, step = t => t.steps[Math.min(t.i, t.steps.length - 1)];
+  let t0 = 0;
+  const draw = () => {
+    ctx.fillStyle = SKY; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const now = performance.now() - t0;
+    for (const s of stars) { const l = LOOK[Math.floor(((now / s.period + s.phase) % 1) * LOOK.length)]; for (const [dx, dy] of SHAPES[s.shape][l]) px(s.x + dx, s.y + dy, s.colour); px(s.x, s.y, l === 'bright' ? SHINE : s.colour); }
+    const c = step(C), l = step(L);
+    if (l.combo) { paint(grids[l.file], LX, LY - 10); } else {
+    const drawLulu = () => { paint(grids[l.file], LX, LY); for (const t of [F, E]) { const f = step(t).file; if (f) for (const [x, y, col] of FACES[f]) px(LX + x, LY + y, col); } };
+    const drawScope = () => paint(grids[SG + 'telescope-placed.txt'], LX, LY);
+    const drawClawd = () => { if (!c.hidden) paint(grids[c.file], c.x, c.y); };
+    // at the telescope her eye is behind the eyepiece; otherwise she is in front of it and of Clawd (her pats land on his head)
+    const order = l.scope ? [drawLulu, drawScope, drawClawd] : [drawScope, drawClawd, drawLulu];
+    if (c.top) { order.splice(order.indexOf(drawClawd), 1); order.push(drawClawd); }
+    order.forEach(f => f());
+    }
+    if (c.hearts !== undefined) for (const h of HEARTS) {
+      const age = c.hearts - h.at; if (age < 0 || age > 5) continue;
+      const shape = age === 0 || age === 5 ? HEART.small : HEART.big;
+      const left = c.x + 16 + h.dx - Math.floor(shape[0].length / 2), top = c.y + 19 + h.dy - age - shape.length;
+      shape.forEach((r, y) => [...r].forEach((ch, x) => { if (ch !== '.') px(left + x, top + y, ch === 'g' ? '#eb6f92' : '#cf5080'); }));
+    }
+  };
+  const tick = t => { const ms = step(t).ms; if (ms === Infinity) return; t.timer = setTimeout(() => { t.i++; tick(t); }, ms); };
+  let frame = null, playing = false;
+  document.getElementById('play').onclick = e => {
+    playing = !playing; e.target.textContent = playing ? 'Pause' : 'Play';
+    tracks.forEach(t => clearTimeout(t.timer)); clearInterval(frame);
+    if (playing) { t0 = performance.now(); tracks.forEach(t => { t.i = 0; tick(t); }); frame = setInterval(draw, 60); }
+    draw();
+  };
+  draw();
+});
+</script>

@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lulu stargazing</title>
+<style>
+  body { background: #232136; color: #e0def4; font: 14px ui-monospace, monospace; margin: 24px; }
+  canvas { image-rendering: pixelated; display: block; margin-top: 16px; max-width: 100%; }
+  button { font: inherit; padding: 6px 14px; background: #393552; color: #e0def4; border: 1px solid #6e6a86; border-radius: 6px; cursor: pointer; }
+</style>
+<p><button id="play">Play</button> Lulu at her telescope under a twinkling sky. Stars only twinkle while playing.</p>
+<canvas id="sky"></canvas>
+<script>
+const W = 96, H = 48, SCALE = 6, SKY = '#191724';
+const LULU_X = 3, LULU_Y = H - 35 - 3;                   // the 49 x 35 Lulu-and-telescope grid, bottom-left, lifted 3 px off the bottom
+const SKY_LOW = LULU_Y + 1;                               // stars stay high in the sky, above Lulu's head (her head top is 4 rows into her grid)
+const YELLOW = '#f6c177', DEEP = '#ea9d34', SHINE = '#faf4ed';
+
+// a small seeded random generator, so the stars are in the same places every time
+let seed = 7; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+fetch('lulu-telescope.txt', { cache: 'no-store' }).then(r => r.text()).then(text => {
+  const lines = text.split('\n').filter(Boolean);
+  const pal = Object.fromEntries(lines.filter(l => /^\S=#/.test(l)).map(l => [l[0], l.slice(2)]));
+  const rows = lines.filter(l => !/^\S=#/.test(l));
+  const busy = (x, y) => [-1, 0, 1].some(dy => [-1, 0, 1].some(dx => { const r = rows[y - LULU_Y + dy]; return r && r[x - LULU_X + dx] && r[x - LULU_X + dx] !== '.'; }));
+
+  // stars: a place, a colour, how long one twinkle takes, and where in that twinkle it starts; big ones flash into a small cross
+  const stars = [];
+  while (stars.length < 6) {   // kept sparse, so the sky is not busy
+    const x = 2 + Math.floor(rand() * (W - 4)), y = 2 + Math.floor(rand() * (H - 6));
+    if ([[0, 0], [-2, 0], [2, 0], [0, -3], [0, 3]].some(([dx, dy]) => busy(x + dx, y + dy)) || y < 4 || y > SKY_LOW || stars.some(s => Math.abs(s.x - x) < 14)) continue;
+    const k = rand(), shape = k < 0.3 ? 'dot' : k < 0.65 ? 'plus' : 'sparkle';
+    // colour: mostly light yellow, now and then the darker yellow
+    stars.push({ x, y, colour: rand() < 0.15 ? DEEP : YELLOW, shape, period: 3500 + rand() * 3500, phase: rand() });
+  }
+  // star shapes: the pixels around the centre at each brightness ('dim', 'dot', 'bright'); outer pixels use the deeper yellow
+  const ring = r => [[r, 0], [-r, 0], [0, r], [0, -r]], diag = r => [[r, r], [-r, r], [r, -r], [-r, -r]];
+  const SHAPES = {
+    dot: { dim: [], dot: [], bright: ring(1).map(p => [...p, true]) },                                      // a dot that flashes into a tiny cross
+    plus: { dim: [], dot: ring(1), bright: [...ring(1), ...ring(2).map(p => [...p, true])] },                // + that grows its arms
+    sparkle: { dim: [[0, 1, true], [0, -1, true]], dot: [...ring(1), [0, 2, true], [0, -2, true]],             // tall four-point sparkle, like the painting
+      bright: [...ring(1), [0, 2], [0, -2], [0, 3, true], [0, -3, true], [2, 0, true], [-2, 0, true]] },
+  };
+  // one twinkle, as a list of looks over its period: mostly a quiet dot, briefly brighter (and a cross for big stars), sometimes gone
+  const LOOK = ['dim', 'dim', 'dim', 'dot', 'dot', 'bright', 'dot', 'dim', 'dim', 'dim'];   // no blinking out: calmer
+  const look = (s, t) => LOOK[Math.floor(((t / s.period + s.phase) % 1) * LOOK.length)];
+
+  const canvas = document.getElementById('sky'); canvas.width = W * SCALE; canvas.height = H * SCALE;
+  const ctx = canvas.getContext('2d');
+  const px = (x, y, c) => { ctx.fillStyle = c; ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE); };
+  const draw = t => {
+    ctx.fillStyle = SKY; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (const s of stars) {
+      const l = look(s, t);
+      if (l === 'off') continue;
+      // the star's own yellow everywhere; at its brightest the centre lights up in eye-shine white
+      for (const [dx, dy] of SHAPES[s.shape][l]) px(s.x + dx, s.y + dy, s.colour);
+      px(s.x, s.y, l === 'bright' ? SHINE : s.colour);
+    }
+    rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== '.') px(LULU_X + x, LULU_Y + y, pal[c]); }));
+  };
+  let start = null, timer = null;
+  const tick = () => { draw(performance.now() - start); timer = setTimeout(tick, 120); };   // a new picture every 120 ms
+  document.getElementById('play').onclick = e => {
+    if (timer) { clearTimeout(timer); timer = null; e.target.textContent = 'Play'; }
+    else { start = performance.now(); tick(); e.target.textContent = 'Pause'; }
+  };
+  draw(0);
+});
+</script>
