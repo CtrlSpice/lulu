@@ -57,6 +57,8 @@ const params = new URLSearchParams(location.search);
 const DEFAULT_VIEWS = [['front', 'views/front.txt'], ['side', 'views/side.txt'], ['back', 'views/back.txt']];
 const VIEWS = params.get('views')?.split(',').map(p => p.split(':')) ?? DEFAULT_VIEWS;
 // ?columns=view:12+17,other:14+19 marks those columns on those views, e.g. which legs are lifted in each frame
+// ?rows=38+40+42 draws a line along the bottom of each of those rows on every view, e.g. depth lanes for feet
+const ROWLINES = (params.get('rows') ?? '').split(/[+ ]/).filter(Boolean).map(Number);
 const COLUMNS = Object.fromEntries((params.get('columns') ?? '').split(',').filter(Boolean).map(p => { const [v, xs] = p.split(':'); return [v, xs.split(/[+ ]/).map(Number)]; }));
 // ?outline=path/to/grid.txt shows that grid's outline pixels over every view; path/to/grid.txt@16 shifts it 16 columns right
 const [OUTLINE_FILE, OUTLINE_SHIFT = '0'] = (params.get('outline') ?? '').split('@');
@@ -92,6 +94,11 @@ const draw = () => {
     if (refOutline && refOutlineRows) {
       ctx.save(); ctx.strokeStyle = '#f6c177'; ctx.lineWidth = 2;
       refOutlineRows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === 'o') ctx.strokeRect((x + +OUTLINE_SHIFT) * SCALE + 3, y * SCALE + 3, SCALE - 6, SCALE - 6); }));
+      ctx.restore();
+    }
+    if (ROWLINES.length) {
+      ctx.save(); ctx.strokeStyle = '#9ccfd8'; ctx.lineWidth = 2; ctx.setLineDash([8, 4]);
+      for (const y of ROWLINES) { ctx.beginPath(); ctx.moveTo(0, (y + 1) * SCALE); ctx.lineTo(w * SCALE, (y + 1) * SCALE); ctx.stroke(); }
       ctx.restore();
     }
     if (columnGuide && COLUMNS[v]) {

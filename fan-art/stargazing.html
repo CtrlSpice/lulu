@@ -33,7 +33,8 @@ const LIFT = clock;
 const COMBO = [['lulu-pickup-2.txt', 350], ['lulu-boost.txt', 1600], ['lulu-pickup-2.txt', 350], ['lulu-pickup.txt', 400]];   // lift, look, lower, set down
 for (const [, ms] of COMBO) hold('clawd.txt', ms, FEET.x, FEET.y, { hidden: true });
 const SET_DOWN = clock;
-scuttle(FEET.x, CLOSE, 'step-a.txt', 'step-b.txt', {}, FEET.y);   // scuttles off to her side                                            // scuttles off to her side
+// scuttles off to her side, starting from the row he was set down on (1 nearer to us) and stepping back up to the head-pat row halfway
+{ const mid = Math.round((FEET.x + CLOSE) / 2); scuttle(FEET.x, mid, 'step-a.txt', 'step-b.txt', {}, FEET.y); scuttle(mid, CLOSE, 'step-a.txt', 'step-b.txt', {}, CY); }                                            // scuttles off to her side
 const ARRIVE = clock;
 hold('clawd-lean.txt', 500, CLOSE);                              // stops and leans in
 const PAT = 300, PAT_START = clock;
