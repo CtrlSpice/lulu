@@ -1,0 +1,15 @@
+{
+  "name": "lulu-watercolour-live",
+  "private": true,
+  "type": "module",
+  "description": "Live watercolour axolotl: a 3D model of Lulu painted in WebGL.",
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "luts": "node tools/make-luts.ts",
+    "test": "tsc && node tools/check-model.ts tools/reference/top-04-full.json tools/reference/top-04-guides.json"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
