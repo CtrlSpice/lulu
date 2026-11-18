@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Lulu in ink</title>
+<style>
+  body { margin: 0; padding: 24px; background: #2a2530; color: #eee6f0; font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 14px; }
+  svg { width: min(520px, 100%); height: auto; display: block; border-radius: 8px; }
+</style>
+<h1>Lulu in ink: brush outline</h1>
+<svg id="art" viewBox="0 0 400 460" xmlns="http://www.w3.org/2000/svg"></svg>
+
+<script type="module">
+const NS = 'http://www.w3.org/2000/svg';
+const INK = '#141114', PAPER = '#ffffff';
+const art = document.getElementById('art');
+
+// Seeded random so the brush texture is the same on every reload.
+const rand = (s => () => (s = (s * 16807) % 2147483647) / 2147483647)(11);
+
+const probe = document.createElementNS(NS, 'path');
+art.append(probe);
+
+// Points along a path with their unit normals.
+const sample = (d, steps) => {
+  probe.setAttribute('d', d);
+  const len = probe.getTotalLength();
+  const pts = Array.from({ length: steps + 1 }, (_, i) => probe.getPointAtLength((i / steps) * len));
+  return pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(steps, i + 1)];
+    const dx = b.x - a.x, dy = b.y - a.y, n = Math.hypot(dx, dy) || 1;
+    return { x: p.x, y: p.y, nx: -dy / n, ny: dx / n };
+  });
+};
+const f = n => n.toFixed(1);
+
+// A dry-brush stroke: a solid wet core that runs out, with bristle streaks that break up towards the end.
+const brush = (d, w, { dry = 0.55, bristles = 9, start = 0.12, end = 0.25, scratch = 0 } = {}) => {
+  const steps = 90, pts = sample(d, steps);
+  const width = t => w * Math.max(0.15, Math.min(1, t / start, (1 - t) / end));
+  // Core: tapered filled shape up to where the brush starts to dry.
+  const coreEnd = Math.round(steps * dry);
+  const L = [], R = [];
+  for (let i = 0; i <= coreEnd; i++) {
+    const t = i / steps, p = pts[i];
+    const hw = (width(t) / 2) * 0.8 * Math.min(1, (coreEnd - i) / 12 + 0.25);
+    L.push(`${f(p.x + p.nx * hw)} ${f(p.y + p.ny * hw)}`);
+    R.push(`${f(p.x - p.nx * hw)} ${f(p.y - p.ny * hw)}`);
+  }
+  let out = `<path d="M${L.join(' L')} L${R.reverse().join(' L')} Z" fill="${INK}"/>`;
+  // Bristles: thin lines spread across the stroke width, each running dry at its own point.
+  for (let k = 0; k < bristles; k++) {
+    const off = ((k / (bristles - 1)) * 2 - 1) * 0.45 + (rand() - 0.5) * 0.12;
+    const tEnd = dry + rand() * (1 - dry);
+    let seg = '', pen = false;
+    for (let i = 0; i <= steps * tEnd; i++) {
+      const t = i / steps, p = pts[i], hw = width(t) / 2;
+      const skip = (t > dry && rand() < (t - dry) * 1.6) || rand() < scratch;
+      if (skip) { pen = false; continue; }
+      seg += `${pen ? 'L' : 'M'}${f(p.x + p.nx * hw * off * 2)} ${f(p.y + p.ny * hw * off * 2)} `;
+      pen = true;
+    }
+    out += `<path d="${seg}" fill="none" stroke="${INK}" stroke-width="${f(Math.max(0.8, (w / bristles) * 1.5))}" stroke-linecap="round" opacity="${f(0.7 + rand() * 0.3)}"/>`;
+  }
+  return out;
+};
+
+// Gills: three small rounded lobes per side of the head, drawn like the hamster's ears.
+// Each lobe is a circle [cx, cy, r]; only the cluster's outer outline is drawn, as one scalloped stroke.
+const GILLS = [[95, 177, 17], [81, 200, 17], [73, 224, 16]];
+const BODY_CENTRE = [200, 240];
+const TAU = Math.PI * 2;
+
+// The crossing point of two circles that lies farther from the body, i.e. on the outside of the cluster.
+const outerCrossing = ([x1, y1, r1], [x2, y2, r2]) => {
+  const d = Math.hypot(x2 - x1, y2 - y1), a = (r1 * r1 - r2 * r2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, r1 * r1 - a * a));
+  const mx = x1 + (a * (x2 - x1)) / d, my = y1 + (a * (y2 - y1)) / d;
+  const pts = [[mx + (h * (y2 - y1)) / d, my - (h * (x2 - x1)) / d], [mx - (h * (y2 - y1)) / d, my + (h * (x2 - x1)) / d]];
+  const far = ([x, y]) => Math.hypot(x - BODY_CENTRE[0], y - BODY_CENTRE[1]);
+  return far(pts[0]) > far(pts[1]) ? pts[0] : pts[1];
+};
+
+// One scalloped stroke: from where the top lobe meets the head, around the outside of each lobe, to where the bottom lobe meets the head.
+// sweep 0 runs anticlockwise on screen (left side); sweep 1 runs clockwise (right side).
+const gillCluster = (circles, sweep) => {
+  const gap = 1.1;
+  const facing = ([cx, cy]) => Math.atan2(BODY_CENTRE[1] - cy, BODY_CENTRE[0] - cx);
+  const onCircle = ([cx, cy, r], a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  const first = circles[0], last = circles[circles.length - 1];
+  const ends = (c, pickTop) => {
+    const [p, q] = [onCircle(c, facing(c) + gap), onCircle(c, facing(c) - gap)];
+    return (p[1] < q[1]) === pickTop ? p : q;
+  };
+  const points = [ends(first, true), ...circles.slice(1).map((c, i) => outerCrossing(circles[i], c)), ends(last, false)];
+  let d = `M${f(points[0][0])} ${f(points[0][1])}`;
+  circles.forEach(([cx, cy, r], i) => {
+    const [p, q] = [points[i], points[i + 1]];
+    const a0 = Math.atan2(p[1] - cy, p[0] - cx), a1 = Math.atan2(q[1] - cy, q[0] - cx);
+    const span = (((sweep ? a1 - a0 : a0 - a1) % TAU) + TAU) % TAU;
+    d += ` A${r} ${r} 0 ${span > Math.PI ? 1 : 0} ${sweep} ${f(q[0])} ${f(q[1])}`;
+  });
+  return brush(d, 7, { dry: 0.7, bristles: 7, start: 0.1, end: 0.15 });
+};
+
+// Nudge every coordinate in a path by up to j units, so repeated passes don't sit exactly on top of each other.
+const jitter = (d, j) => d.replace(/-?\d+(?:\.\d+)?/g, n => f(+n + (rand() - 0.5) * 2 * j));
+
+// A hand-sketched line: one pass per width in weights, each slightly offset, the first heaviest.
+const sketch = (d, weights) => weights.map((w, i) => brush(i ? jitter(d, 3) : d, w, { dry: 0.7 + rand() * 0.2, bristles: Math.max(4, Math.round(w * 1.1)), start: 0.08, end: 0.12, scratch: i ? 0.06 : 0.02 })).join('');
+
+const strokes = [
+  // Body outline, drawn like the hamster: two or three overlapping scratchy passes per section,
+  // heavier on the lower sides, closed along the bottom between the feet.
+  sketch('M126 150 C150 127 250 127 274 150', [4.5, 3]),
+  sketch('M126 150 C104 168 80 205 70 250 C60 300 66 350 96 382 C112 398 128 404 146 406', [11, 7, 4]),
+  sketch('M274 150 C296 168 320 205 330 250 C340 300 334 350 304 382 C288 398 272 404 254 406', [8, 5, 3]),
+  sketch('M146 406 C175 410 225 410 254 406', [5, 3]),
+  // Tail peeking out on the right.
+  brush('M334 356 C358 366 376 356 386 334', 6, { dry: 0.4, bristles: 6, start: 0.2, end: 0.4 }),
+  // Feet.
+  brush('M146 406 C156 398 174 400 182 408', 5, { dry: 0.7, bristles: 5 }),
+  brush('M218 408 C226 400 244 398 254 406', 5, { dry: 0.7, bristles: 5 }),
+  // Hands held in front, with little fingers.
+  brush('M170 298 C178 288 190 290 192 300', 4, { dry: 0.7, bristles: 4 }),
+  brush('M208 300 C210 290 222 288 230 298', 4, { dry: 0.7, bristles: 4 }),
+  brush('M176 300 L172 308', 2.4, { dry: 0.8, bristles: 2 }), brush('M184 300 L183 309', 2.4, { dry: 0.8, bristles: 2 }),
+  brush('M216 300 L217 309', 2.4, { dry: 0.8, bristles: 2 }), brush('M224 300 L228 308', 2.4, { dry: 0.8, bristles: 2 }),
+  // Wide uwu mouth.
+  brush('M144 240 C146 252 156 255 182 255 C190 255 192 253 194 250 C196 246 204 246 206 250 C208 253 210 255 218 255 C244 255 254 252 256 240', 3.6, { dry: 0.8, bristles: 3, start: 0.12, end: 0.12 }),
+  // Dimples just outside the mouth's upturned ends, like pixel Lulu.
+  brush('M137 235.5 C134 239.5 134 245 137 248.5', 2.4, { dry: 0.85, bristles: 2, start: 0.35, end: 0.35 }),
+  brush('M263 235.5 C266 239.5 266 245 263 248.5', 2.4, { dry: 0.85, bristles: 2, start: 0.35, end: 0.35 }),
+  // Gills, left and mirrored right.
+  // Two passes each, like the hamster's ears.
+  ...[0, 1].flatMap(pass => [gillCluster(GILLS.map(c => pass ? c.map(v => v + (rand() - 0.5) * 3) : c), 0), gillCluster(GILLS.map(([cx, cy, r]) => [400 - cx + (pass ? (rand() - 0.5) * 3 : 0), cy + (pass ? (rand() - 0.5) * 3 : 0), r]), 1)]),
+];
+
+art.innerHTML = `
+<defs>
+  <!-- Slight wobble so the edges look like brush on paper. -->
+  <filter id="rough" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="3" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</defs>
+<rect width="400" height="460" fill="${PAPER}"/>
+<g filter="url(#rough)">${strokes.join('')}</g>
+<ellipse cx="166" cy="208" rx="6.5" ry="10.5" fill="${INK}"/>
+<ellipse cx="234" cy="208" rx="6.5" ry="10.5" fill="${INK}"/>
+<!-- Eye shine: a dot of bare paper at the top right of each eye, like pixel Lulu. -->
+<circle cx="168.5" cy="202" r="2.4" fill="${PAPER}"/>
+<circle cx="236.5" cy="202" r="2.4" fill="${PAPER}"/>
+`;
+</script>
+</html>

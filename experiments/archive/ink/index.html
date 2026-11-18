@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Lulu in ink</title>
+<style>
+  body { margin: 0; padding: 24px; background: #2a2530; color: #eee6f0; font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 14px; }
+  svg { width: min(760px, 100%); height: auto; display: block; border-radius: 8px; }
+</style>
+<h1>Lulu in ink: axolotl in ink wash</h1>
+<svg id="art" viewBox="0 0 480 400" xmlns="http://www.w3.org/2000/svg"></svg>
+
+<script type="module">
+const NS = 'http://www.w3.org/2000/svg';
+const INK = '#141114', PAPER = '#ffffff';
+const art = document.getElementById('art');
+
+// Seeded random so the brush texture is the same on every reload.
+const rand = (s => () => (s = (s * 16807) % 2147483647) / 2147483647)(11);
+const f = n => n.toFixed(1);
+const mirror = d => d.replace(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g, (_, x, y) => `${f(480 - +x)} ${y}`);
+
+// Two measuring paths: one for brush strokes, one for gill stalks (filaments are brushed while a stalk is being measured).
+const probe = document.createElementNS(NS, 'path'), stalkProbe = document.createElementNS(NS, 'path');
+art.append(probe, stalkProbe);
+
+// Points along a path with their unit normals.
+const sample = (d, steps, el = probe) => {
+  el.setAttribute('d', d);
+  const len = el.getTotalLength();
+  const pts = Array.from({ length: steps + 1 }, (_, i) => el.getPointAtLength((i / steps) * len));
+  return pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(steps, i + 1)];
+    const dx = b.x - a.x, dy = b.y - a.y, n = Math.hypot(dx, dy) || 1;
+    return { x: p.x, y: p.y, nx: -dy / n, ny: dx / n };
+  });
+};
+
+// A brush stroke: a solid wet core that runs out, with bristle streaks that break up towards the end.
+const brush = (d, w, { dry = 0.55, bristles = 9, start = 0.12, end = 0.25 } = {}) => {
+  const steps = 60, pts = sample(d, steps);
+  const width = t => w * Math.max(0.15, Math.min(1, t / start, (1 - t) / end));
+  const coreEnd = Math.round(steps * dry);
+  const L = [], R = [];
+  for (let i = 0; i <= coreEnd; i++) {
+    const t = i / steps, p = pts[i];
+    const hw = (width(t) / 2) * 0.8 * Math.min(1, (coreEnd - i) / 8 + 0.25);
+    L.push(`${f(p.x + p.nx * hw)} ${f(p.y + p.ny * hw)}`);
+    R.push(`${f(p.x - p.nx * hw)} ${f(p.y - p.ny * hw)}`);
+  }
+  let out = `<path d="M${L.join(' L')} L${R.reverse().join(' L')} Z" fill="${INK}"/>`;
+  for (let k = 0; k < bristles; k++) {
+    const off = ((k / Math.max(1, bristles - 1)) * 2 - 1) * 0.45 + (rand() - 0.5) * 0.12;
+    const tEnd = dry + rand() * (1 - dry);
+    let seg = '', pen = false;
+    for (let i = 0; i <= steps * tEnd; i++) {
+      const t = i / steps, p = pts[i], hw = width(t) / 2;
+      if (t > dry && rand() < (t - dry) * 1.6) { pen = false; continue; }
+      seg += `${pen ? 'L' : 'M'}${f(p.x + p.nx * hw * off * 2)} ${f(p.y + p.ny * hw * off * 2)} `;
+      pen = true;
+    }
+    out += `<path d="${seg}" fill="none" stroke="${INK}" stroke-width="${f(Math.max(0.8, (w / bristles) * 1.5))}" stroke-linecap="round" opacity="${f(0.7 + rand() * 0.3)}"/>`;
+  }
+  return out;
+};
+
+// A feathery gill: the stalk as one tapering stroke, with short filament strokes fanning off both sides.
+const gill = (stalk, { count = 18, len = [10, 20] } = {}) => {
+  let out = brush(stalk, 5, { dry: 0.75, bristles: 4, start: 0.1, end: 0.4 });
+  const pts = sample(stalk, count + 4, stalkProbe);
+  for (let i = 4; i < pts.length - 1; i++) {
+    const p = pts[i], q = pts[i + 1], ang = Math.atan2(q.y - p.y, q.x - p.x), t = i / pts.length;
+    for (const side of [-1, 1]) {
+      const a = ang + side * (0.7 + rand() * 0.4);
+      const l = (len[0] + rand() * (len[1] - len[0])) * (0.55 + 0.45 * Math.sin(Math.PI * Math.min(1, t * 1.15)));
+      const mx = p.x + Math.cos(a) * l * 0.5, my = p.y + Math.sin(a) * l * 0.5;
+      const ex = p.x + Math.cos(a + side * 0.3) * l, ey = p.y + Math.sin(a + side * 0.3) * l;
+      out += brush(`M${f(p.x)} ${f(p.y)} Q${f(mx)} ${f(my)} ${f(ex)} ${f(ey)}`, 2.6, { dry: 0.7, bristles: 2, start: 0.05, end: 0.85 });
+    }
+  }
+  return out;
+};
+
+// ---- A real axolotl seen from the front, posed like pixel Lulu ----
+
+// Head: broad and flat, much wider than the body, as on a real axolotl.
+const HEAD = 'M240 94 C306 94 352 122 354 166 C356 208 308 232 240 234 C172 232 124 208 126 166 C128 122 174 94 240 94 Z';
+// Body: narrower than the head, slightly fuller at the bottom.
+const BODY = 'M192 218 C176 258 178 300 196 326 C214 346 266 346 284 326 C302 300 304 258 288 218 Z';
+// Tail: comes out from behind the body and curls up on the right, with a pale fin around it.
+const TAIL = 'M278 300 C322 320 358 312 382 288 C398 270 404 252 398 234 C412 262 412 294 394 320 C370 350 318 358 272 336 Z';
+const FIN = 'M272 336 C318 362 376 356 402 318 C420 290 420 254 398 234 C426 254 434 300 410 334 C380 374 312 376 268 346 Z';
+
+// Gill stalks: three per side, fanning out wide from behind the head like pixel Lulu's.
+const GILLS = ['M150 124 C128 102 108 88 86 78', 'M136 150 C106 142 80 142 54 148', 'M138 178 C112 186 90 198 72 216'];
+
+// Legs: short and splayed, front legs from the shoulders, back legs from the hips; toes as small dark ticks.
+const LEGS = ['M198 252 C182 266 170 280 162 298', 'M202 318 C190 330 182 342 178 356'];
+const TOES = ['M162 298 L148 302', 'M162 299 L152 310', 'M163 300 L160 313', 'M164 300 L168 312', 'M178 356 L164 360', 'M178 357 L168 368', 'M179 358 L176 371', 'M180 358 L184 370'];
+
+// Face, in pixel Lulu's spirit: small wide-set eyes, a wide smile across the head with a little bump in the middle, dimples at the corners.
+const EYES = [[186, 152], [294, 152]];
+const MOUTH = 'M168 188 C171 200 184 204 214 204 C226 204 230 202 233 198 C235 194 245 194 247 198 C250 202 254 204 266 204 C296 204 309 200 312 188';
+const DIMPLE = 'M160 183 C156 188 156 194 160 199';
+
+const wash = (d, opacity) => `<path d="${d}" fill="${INK}" fill-opacity="${opacity}" filter="url(#wash)"/>`;
+
+art.innerHTML = `
+<defs>
+  <!-- Ink wash: soft wobbling edge, with the darker rim a wash leaves where it dries. -->
+  <filter id="wash" x="-10%" y="-15%" width="120%" height="130%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="3" seed="5" result="low"/>
+    <feDisplacementMap in="SourceGraphic" in2="low" scale="8" xChannelSelector="R" yChannelSelector="G" result="shape"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.3" numOctaves="2" seed="6" result="fine"/>
+    <feDisplacementMap in="shape" in2="fine" scale="4" xChannelSelector="R" yChannelSelector="G" result="edge"/>
+    <feGaussianBlur in="edge" stdDeviation="1" result="soft"/>
+    <feMorphology in="soft" operator="erode" radius="2.5" result="inner"/>
+    <feComposite in="soft" in2="inner" operator="out" result="ring"/>
+    <feComponentTransfer in="ring" result="rim"><feFuncA type="linear" slope="2.4"/></feComponentTransfer>
+    <feMerge><feMergeNode in="soft"/><feMergeNode in="rim"/></feMerge>
+  </filter>
+  <!-- Slight wobble so brush strokes look like brush on paper. -->
+  <filter id="rough" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="3" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="2" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</defs>
+<rect width="480" height="400" fill="${PAPER}"/>
+
+<!-- Tail and fin behind the body. -->
+${wash(FIN, 0.03)}${wash(TAIL, 0.07)}
+
+<!-- Legs behind the body's edge. -->
+<g opacity="0.42" filter="url(#rough)">${[...LEGS, ...LEGS.map(mirror)].map(d => brush(d, 15, { dry: 0.7, bristles: 9, start: 0.05, end: 0.3 })).join('')}</g>
+<g opacity="0.85" filter="url(#rough)">${[...TOES, ...TOES.map(mirror)].map(d => brush(d, 2.8, { dry: 0.8, bristles: 2, start: 0.1, end: 0.5 })).join('')}</g>
+
+<!-- Body: paper, then a pale wash with a deeper wash low on the belly. -->
+<path d="${BODY}" fill="${PAPER}"/>
+${wash(BODY, 0.04)}
+${wash('M184 300 C196 330 220 344 240 344 C260 344 284 330 296 300 C280 322 262 332 240 332 C218 332 200 322 184 300 Z', 0.08)}
+
+<!-- Gills: the darkest parts. -->
+<g opacity="0.88" filter="url(#rough)">${[...GILLS, ...GILLS.map(mirror)].map(d => gill(d)).join('')}</g>
+
+<!-- Head: paper first so the gill roots don't show through, then the wash and a shadow under the chin. -->
+<path d="${HEAD}" fill="${PAPER}"/>
+${wash(HEAD, 0.035)}
+${wash('M132 192 C152 222 192 234 240 236 C288 234 328 222 348 192 C326 214 288 226 240 228 C192 226 154 214 132 192 Z', 0.1)}
+
+<!-- Face. -->
+<g filter="url(#rough)">
+  ${brush(MOUTH, 3.6, { dry: 0.8, bristles: 3, start: 0.12, end: 0.12 })}
+  ${[DIMPLE, mirror(DIMPLE)].map(d => brush(d, 2.4, { dry: 0.85, bristles: 2, start: 0.35, end: 0.35 })).join('')}
+</g>
+${EYES.map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="6.5" ry="10" fill="${INK}"/><circle cx="${x + 2.5}" cy="${y - 5.5}" r="2.3" fill="${PAPER}"/>`).join('')}
+`;
+</script>
+</html>
