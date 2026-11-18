@@ -1,0 +1,130 @@
+// Watercolour axolotl, curled in a C, head lifted to the right. Silhouette traced from the reference
+// (spine and widths in widths.json); washes, limbs, gills and face painted on top.
+import { readFileSync } from 'node:fs';
+import { W, H, N, makePaper, layer, line, dot, lift, save, useInk, fbm, blur } from './paint.mjs';
+import { hexToLab, anchored } from './match.mjs';
+import * as P from './paint.mjs';
+const out = process.argv[2] ?? 'curl.png';
+makePaper();
+const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const bump = (c, w, x) => Math.exp(-(((x - c) / w) ** 2));
+const K = 1.75, M = ([x, y]) => [500 + (x - 302) * K, 350 + (y - 318) * K];
+
+// ---- body field from the traced spine ----
+let rows = JSON.parse(readFileSync(new URL('./widths.json', import.meta.url), 'utf8'));
+rows = rows.map((r, i) => i >= 13 && i <= 27 ? [r[0], r[1], Math.min(r[2], 36 + (i - 13) * -0.3), r[3]] : r); // far gills are not head
+const smooth = (k) => rows.map((_, i) => { let s = 0, n = 0; for (let j = Math.max(0, i - 6); j <= Math.min(rows.length - 1, i + 6); j++) { s += rows[j][k]; n++; } return s / n; });
+const wo = smooth(2).map(v => v * K), wi = smooth(3).map(v => v * K), sp = rows.map(r => M(r)), n = sp.length;
+const T = new Float32Array(N).fill(-1), V = new Float32Array(N), A = new Float32Array(N), Dn = new Float32Array(N);
+for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+  let best = 1e9, bi = 0, bu = 0;
+  for (let i = 0; i < n - 1; i++) {
+    const [ax, ay] = sp[i], [bx, by] = sp[i + 1], dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    let u = ((x - ax) * dx + (y - ay) * dy) / L2; u = Math.max(i === 0 ? -0.6 : 0, Math.min(i === n - 2 ? 1.8 : 1, u));
+    const d = Math.hypot(x - ax - dx * u, y - ay - dy * u); if (d < best) { best = d; bi = i; bu = u; }
+  }
+  const [ax, ay] = sp[bi], [bx, by] = sp[bi + 1], tl = Math.hypot(bx - ax, by - ay), tx = (bx - ax) / tl, ty = (by - ay) / tl, nx = -ty, ny = tx;
+  const o = (x - ax - (bx - ax) * bu) * nx + (y - ay - (by - ay) * bu) * ny;
+  const uu = Math.max(0, Math.min(1, bu)), Wo = wo[bi] + (wo[bi + 1] - wo[bi]) * uu, Wi = wi[bi] + (wi[bi + 1] - wi[bi]) * uu;
+  // ends: snout rounds off ahead of the first point, tail tapers to a point past the last
+  const over = bu < 0 ? -bu * tl : bu > 1 ? (bu - 1) * tl : 0, shrink = bu < 0 ? Math.sqrt(Math.max(0, 1 - (over / 14) ** 2)) : bu > 1 ? Math.max(0, 1 - over / 26) : 1;
+  const d = (o > 0 ? Wo : Wi) * shrink - best, i = y * W + x;
+  if (d > -2) { T[i] = (bi + bu) / (n - 1); V[i] = (Wo - o) / (Wo + Wi); A[i] = Math.min(1, Math.max(0, d / 1.6 + 0.4)); Dn[i] = d; }
+}
+const inside = Float32Array.from(A), clip = blur(A, 1);
+
+// ---- 1. base wash: Lulu pink over the whole animal, wet, darker where it dried at the edge ----
+useInk('body');
+const base = layer();
+for (let i = 0; i < N; i++) if (A[i]) { const t = T[i], v = V[i]; base.D[i] = A[i] * (0.22 + 0.12 * sm(0.4, 1, v) + 0.1 * bump(0.2, 0.25, t) - 0.12 * sm(0.75, 1, t) * sm(0.3, 0, v)); }
+base.dry({ bleed: 6, cloud: 0.45, feather: 0.6, ring: 0.6, soften: 2, grain: 0.15, clip });
+
+// ---- 2. wine, middle wash: dropped into the wet base along the back and under the throat ----
+useInk('wine');
+const backStrength = t => 0.25 + 0.75 * sm(0.04, 0.16, t) * (1 - 0.55 * sm(0.45, 0.75, t)) - 0.35 * sm(0.78, 1, t);
+const mid = layer();
+for (let i = 0; i < N; i++) if (A[i]) {
+  const t = T[i], v = V[i], x = i % W, y = (i / W) | 0;
+  const back = backStrength(t) * (1 - sm(0.25, 0.75, v));
+  const belly = sm(0.55, 0.9, v) * (bump(0.2, 0.09, t) * 0.9 + bump(0.07, 0.05, t) * 0.7);
+  mid.D[i] = A[i] * Math.max(back, belly) * 0.55 * (0.7 + 0.6 * fbm(x / 45, y / 45, 3));
+}
+mid.dry({ bleed: 22, cloud: 0.5, feather: 0.5, ring: 0.45, soften: 6, grain: 0.2, clip });
+
+// ---- 3. wine, dark: a heavier charge along the spine that blooms and breaks up as it dries ----
+const dark = layer();
+for (let i = 0; i < N; i++) if (A[i]) {
+  const t = T[i], v = V[i], x = i % W, y = (i / W) | 0;
+  const along = sm(0.08, 0.18, t) * (1 - sm(0.5, 0.8, t));
+  const across = bump(0.24 + 0.12 * sm(0.4, 0.75, t), 0.13, v);
+  const blot = sm(0.35, 0.75, fbm(x / 70 + 5, y / 70, 3)) * 0.7 + 0.3 * sm(0.5, 0.7, fbm(x / 30 + 9, y / 30, 3));
+  const belly = sm(0.75, 0.95, v) * bump(0.21, 0.06, t) * 0.8;
+  dark.D[i] = A[i] * Math.max(along * across * (0.75 + 1.0 * blot), belly * (0.6 + blot)) * 1.4;
+}
+dark.dry({ bleed: 10, cloud: 0.3, feather: 1, ring: 0.7, soften: 4, grain: 0.25, clip, hair: 0.6 });
+
+// blooms: where wetter paint ran back into the drying wash it pushed pigment out to a hard, frilly edge
+const bloom = (cx, cy, r) => { [cx, cy] = M([cx, cy]); r *= K; for (let y = Math.floor(cy - r * 1.4); y <= cy + r * 1.4; y++) for (let x = Math.floor(cx - r * 1.4); x <= cx + r * 1.4; x++) { const i = y * W + x; if (!A[i]) continue; const rr = r * (0.8 + 0.4 * fbm(x / 7, y / 7, 3)), d = Math.hypot(x - cx, y - cy) / rr; if (d > 1.08) continue; P.S[i] *= d < 1 ? 0.55 + 0.25 * d * d : 1.6; } };
+for (const b of [[300, 186, 16], [372, 205, 13], [196, 197, 12], [128, 300, 11], [240, 178, 9]]) bloom(...b);
+
+// ---- 4. limbs: forelimb tucked under the chest, hind foot peeking from the inner curve ----
+const limbs = layer();
+const fore = [[412, 318], [384, 333], [352, 334]].map(M);
+limbs.stroke(fore, t => 13 * (1 - 0.3 * t), (t, v) => 0.7 + 0.5 * sm(0, -1, v));
+for (const p of [[338, 326], [336, 333], [340, 340], [347, 343]].map(M)) limbs.stroke([fore[2], [(fore[2][0] + p[0]) / 2, (fore[2][1] + p[1]) / 2], p], t => 5 * (1 - 0.4 * t), () => 0.9);
+const hind = [[196, 258], [186, 268], [176, 276]].map(M);
+limbs.stroke(hind, t => 12 * (1 - 0.25 * t), () => 0.8);
+for (const p of [[160, 271], [161, 280], [167, 287], [176, 289], [184, 286]].map(M)) limbs.stroke([hind[2], p], t => 4.4 * (1 - 0.4 * t), () => 0.95);
+limbs.dry({ bleed: 6, cloud: 0.35, feather: 0.8, ring: 0.6, soften: 2, grain: 0.2 });
+
+// ---- 5. tail fin: the very end flicks up, thin and see-through ----
+useInk('body');
+const fin = layer();
+const finPts = [[262, 458], [288, 446], [306, 424], [318, 396]].map(M);
+fin.stroke(finPts, t => 4 + 20 * Math.sin(Math.PI * Math.min(1, 0.15 + t * 0.9)), (t, v) => 0.2 + 0.14 * sm(0.3, 1, v));
+fin.dry({ bleed: 4, cloud: 0.5, feather: 0.5, ring: 1.2, soften: 1.5, grain: 0.15 });
+useInk('wine');
+line([[272, 452], [292, 440], [308, 420], [318, 398]].map(M), 1.4, 0.45);
+
+// ---- 6. gills: pale feathery fronds; lift the wet wash out underneath first ----
+const rami = [
+  { base: [470, 284], tips: [[458, 240], [482, 236], [504, 254]], far: true },
+  { base: [434, 300], tips: [[388, 266], [376, 304], [392, 340]] },
+].flatMap(g => g.tips.map(tip => ({ base: M(g.base), tip: M(tip), far: g.far })));
+const frond = layer();
+for (const r of rami) {
+  const mx = (r.base[0] + r.tip[0]) / 2, my = (r.base[1] + r.tip[1]) / 2, dx = r.tip[0] - r.base[0], dy = r.tip[1] - r.base[1], len = Math.hypot(dx, dy);
+  const bend = [mx - dy * 0.08, my + dx * 0.08];
+  frond.stroke([r.base, bend, r.tip], t => (r.far ? 16 : 21) * Math.sin(Math.PI * Math.min(1, 0.12 + t * 0.95)) ** 0.7, () => 1);
+  r.mid = bend; r.len = len;
+}
+const fm = blur(frond.D, 3);
+for (const ink of ['body', 'wine']) { useInk(ink); for (let i = 0; i < N; i++) if (fm[i] > 0.01) P.S[i] *= 1 - 0.92 * Math.min(1, fm[i] * 1.3); }
+useInk('body');
+const gl = layer();
+for (let i = 0; i < N; i++) gl.D[i] = 0.12 * Math.min(1, fm[i] * 1.2);
+gl.dry({ bleed: 3, cloud: 0.6, ring: 2.2, soften: 1, grain: 0.1 });
+// filaments: fine wine hairs combed along each frond, both edges
+useInk('wine');
+for (const r of rami) {
+  const q = (s) => { const u = 1 - s; return [u * u * r.base[0] + 2 * u * s * r.mid[0] + s * s * r.tip[0], u * u * r.base[1] + 2 * u * s * r.mid[1] + s * s * r.tip[1]]; };
+  line([r.base, r.mid, r.tip], 1.1, r.far ? 0.22 : 0.3);
+  for (let s = 0.15; s < 0.97; s += 6 / r.len) {
+    const [x, y] = q(s), [x2, y2] = q(Math.min(1, s + 0.01)); let tx = x2 - x, ty = y2 - y; const tl = Math.hypot(tx, ty); tx /= tl; ty /= tl;
+    const fl = (r.far ? 14 : 19) * Math.sin(Math.PI * Math.min(1, s * 1.05)) ** 0.6;
+    for (const side of [1, -1]) line([[x, y], [x + (-ty * side * 0.8 + tx * 0.6) * fl, y + (tx * side * 0.8 + ty * 0.6) * fl]], 0.9, (r.far ? 0.3 : 0.4) * (0.7 + 0.6 * fbm(x * 0.2, y * 0.2, 2)));
+  }
+}
+
+// ---- 7. face: small dark eyes (near one under the gills, far one on the snout's edge), mouth along the jaw ----
+const eye = M([472, 363]); dot(eye[0], eye[1], 6.5, 4); lift(eye[0] - 2, eye[1] - 2.5, 2, 0.1);
+const eye2 = M([532, 331]); dot(eye2[0], eye2[1], 3.6, 3);
+line([[533, 364], [520, 374], [503, 382], [487, 386]].map(M), 1.4, 0.5);
+
+save(out, {
+  paper: hexToLab('#faf4ed'),
+  curves: {
+    body: { curve: anchored('edo-murasaki', [['#c98a96', 45], ['#f2cfcb', 77]], 'paper') },
+    wine: { curve: anchored('edo-murasaki', [['#7e3a5c', 19], ['#c98a96', 45], ['#f2cfcb', 77]], 'paper') },
+  },
+});

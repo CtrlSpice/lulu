@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watercolour annotator</title>
+<style>
+  :root { --base: #191724; --surface: #1f1d2e; --overlay: #26233a; --muted: #6e6a86; --text: #e0def4; --foam: #9ccfd8; --rose: #ebbcba; --love: #eb6f92; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--base); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 16px; margin: 0 0 4px; color: var(--rose); }
+  p { margin: 0 0 12px; color: var(--muted); }
+  .stage { position: relative; display: inline-block; max-width: 100%; }
+  .stage img { display: block; max-width: 100%; border-radius: 6px; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+  .stage canvas.remove { cursor: not-allowed; }
+  .bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+  button { font: inherit; color: var(--text); background: var(--overlay); border: 1px solid var(--muted); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  button.on { border-color: var(--foam); box-shadow: 0 0 0 1px var(--foam); }
+  button.warn { border-color: var(--love); color: var(--love); }
+  #status { color: var(--foam); min-height: 1.4em; }
+  ol { margin: 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  li input { width: min(560px, 90%); font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--overlay); border-radius: 4px; padding: 3px 6px; }
+</style>
+</head>
+<body>
+<h1>Watercolour annotator</h1>
+<p>Draw: scribble on the picture. Note: click a spot to drop a numbered pin and type a note below. Remove: click a mark to delete it. Add to chat: copies the picture with your marks, then paste it into the chat (⌘V). Guides: shows the midline, eye line, shoulder and hip lines and the leg joints over the picture.</p>
+<div class="bar">
+  <button id="draw" class="on">Draw</button>
+  <button id="note">Note</button>
+  <button id="remove">Remove</button>
+  <button id="undo">Undo</button>
+  <button id="clear">Clear all</button>
+  <button id="chat">Add to chat</button>
+  <button id="midline">Guides</button>
+  <span id="status"></span>
+</div>
+<div class="stage"><img id="img" alt="draft"><canvas id="c"></canvas></div>
+<h1 style="margin-top:14px">Notes</h1>
+<ol id="list"></ol>
+<script>
+const file = new URLSearchParams(location.search).get('file') || 'axolotl-top-04.png';
+const key = 'wc-annotate:' + file;
+const img = document.getElementById('img'), c = document.getElementById('c'), g = c.getContext('2d'), list = document.getElementById('list');
+const status = document.getElementById('status'), say = t => { status.textContent = t; };
+// Stored state, in image pixels. Every mark has an "at" counter so Undo works after a reload too.
+const saved = JSON.parse(localStorage.getItem(key) || '{}');
+const state = { strokes: saved.strokes || [], pins: saved.pins || [], next: saved.next || 0 };
+state.strokes = state.strokes.map(s => Array.isArray(s) ? { at: state.next++, pts: s } : s);
+let mode = 'draw', cur = null;
+window.annotations = () => ({ file, size: [img.naturalWidth, img.naturalHeight], strokes: state.strokes.map(s => s.pts), pins: state.pins.map(({ x, y, note }) => ({ x, y, note })) });
+const store = () => localStorage.setItem(key, JSON.stringify(state));
+const pos = e => { const r = c.getBoundingClientRect(); return [Math.round((e.clientX - r.left) * c.width / r.width), Math.round((e.clientY - r.top) * c.height / r.height)]; };
+
+// draw the marks onto a 2D context (used for the overlay and for the copied picture)
+const paint = (ctx, extra) => {
+  ctx.lineWidth = 4; ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = '#00c8ff';
+  for (const pts of [...state.strokes.map(s => s.pts), ...(extra ? [extra] : [])]) { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); }
+  state.pins.forEach((p, i) => {
+    ctx.fillStyle = '#00c8ff'; ctx.beginPath(); ctx.arc(p.x, p.y, 13, 0, 7); ctx.fill();
+    ctx.fillStyle = '#191724'; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(i + 1, p.x, p.y + 1);
+  });
+};
+const render = () => { g.clearRect(0, 0, c.width, c.height); paint(g, cur); };
+const renderList = () => {
+  list.replaceChildren(...state.pins.map((p, i) => {
+    const li = document.createElement('li'), input = document.createElement('input');
+    input.value = p.note; input.placeholder = 'note for pin ' + (i + 1);
+    input.oninput = () => { p.note = input.value; store(); };
+    li.append(input); return li;
+  }));
+};
+const refresh = () => { store(); render(); renderList(); };
+img.onload = () => { c.width = img.naturalWidth; c.height = img.naturalHeight; refresh(); };
+// Midline: show the same picture with the body midline, eye line and shoulder/hip lines drawn over it
+const midBtn = document.getElementById('midline'), overlayFile = file.replace(/\.png$/, '-midline.png');
+let midOn = localStorage.getItem('wc-midline') === '1';
+const showPicture = () => { midBtn.classList.toggle('on', midOn); img.src = (midOn ? overlayFile : file) + '?t=' + Date.now(); };
+img.onerror = () => { if (midOn) { midOn = false; localStorage.setItem('wc-midline', '0'); say('No guides for this picture'); showPicture(); } else say('Could not load ' + file); };
+midBtn.onclick = () => { midOn = !midOn; localStorage.setItem('wc-midline', midOn ? '1' : '0'); say(midOn ? 'Guides on' : 'Guides off'); showPicture(); };
+showPicture();
+
+const buttons = ['draw', 'note', 'remove'];
+const setMode = m => { mode = m; for (const b of buttons) document.getElementById(b).classList.toggle('on', b === m); c.classList.toggle('remove', m === 'remove'); say(''); };
+for (const b of buttons) document.getElementById(b).onclick = () => setMode(b);
+
+document.getElementById('undo').onclick = () => {
+  const s = state.strokes.reduce((a, b) => (!a || b.at > a.at ? b : a), null), p = state.pins.reduce((a, b) => (!a || b.at > a.at ? b : a), null);
+  if (!s && !p) return say('Nothing to undo');
+  if (s && (!p || s.at > p.at)) state.strokes.splice(state.strokes.indexOf(s), 1); else state.pins.splice(state.pins.indexOf(p), 1);
+  refresh(); say('Undone');
+};
+
+// Clear all asks for a second click instead of a pop-up
+let clearArmed = null;
+const clearBtn = document.getElementById('clear');
+clearBtn.onclick = () => {
+  if (!clearArmed) { clearBtn.textContent = 'Click again to clear'; clearBtn.classList.add('warn'); clearArmed = setTimeout(() => { clearArmed = null; clearBtn.textContent = 'Clear all'; clearBtn.classList.remove('warn'); }, 3000); return; }
+  clearTimeout(clearArmed); clearArmed = null; clearBtn.textContent = 'Clear all'; clearBtn.classList.remove('warn');
+  state.strokes = []; state.pins = []; refresh(); say('Cleared');
+};
+
+// Remove: delete the pin or stroke nearest the click (within 14 image px)
+const removeAt = (x, y) => {
+  let best = null, bd = 14;
+  state.pins.forEach(p => { const d = Math.hypot(p.x - x, p.y - y) - 6; if (d < bd) { bd = d; best = ['pins', p]; } });
+  state.strokes.forEach(s => s.pts.forEach(([px, py]) => { const d = Math.hypot(px - x, py - y); if (d < bd) { bd = d; best = ['strokes', s]; } }));
+  if (!best) return say('No mark there');
+  state[best[0]].splice(state[best[0]].indexOf(best[1]), 1); refresh(); say('Removed');
+};
+
+c.onpointerdown = e => {
+  const [x, y] = pos(e);
+  if (mode === 'remove') return removeAt(x, y);
+  if (mode === 'note') { state.pins.push({ at: state.next++, x, y, note: '' }); refresh(); list.lastChild.querySelector('input').focus(); return; }
+  cur = [[x, y]]; c.setPointerCapture(e.pointerId);
+};
+c.onpointermove = e => { if (cur) { cur.push(pos(e)); render(); } };
+c.onpointerup = () => { if (cur && cur.length > 1) state.strokes.push({ at: state.next++, pts: cur }); cur = null; refresh(); };
+
+// Add to chat: the picture with the marks and the notes underneath, copied as an image for pasting into the chat
+document.getElementById('chat').onclick = async () => {
+  const notes = state.pins.map((p, i) => `${i + 1}. ${p.note}`).filter(t => t.length > 3);
+  const out = document.createElement('canvas'); out.width = c.width; out.height = c.height + (notes.length ? 16 + notes.length * 22 : 0);
+  const o = out.getContext('2d'); o.fillStyle = '#191724'; o.fillRect(0, 0, out.width, out.height); o.drawImage(img, 0, 0); paint(o);
+  o.fillStyle = '#e0def4'; o.font = '16px system-ui'; o.textAlign = 'left'; o.textBaseline = 'top'; notes.forEach((t, i) => o.fillText(t, 12, c.height + 10 + i * 22));
+  try {
+    const blob = await new Promise(r => out.toBlob(r, 'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    say('Copied. Paste it into the chat with ⌘V.');
+  } catch (err) { say('Copy failed: ' + err.message); }
+};
+</script>
+</body>
+</html>
