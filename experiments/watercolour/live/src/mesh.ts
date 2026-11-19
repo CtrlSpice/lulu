@@ -15,7 +15,7 @@ import { type Axolotl, type Vec3, SECTION_EXPONENT, finBaseHalfWidth, finThinnin
 export const PART = { body: 1, fin: 2, leg: 3, eye: 4, gill: 5, filament: 6 } as const;
 /** Gill filaments under a frond: one every this many px along it, in two rows (towards the rear and towards the
  *  front). They lean this far towards the tip (0 = square to the frond) and hang this far below level. */
-const FILAMENT_SPACING = 5, FILAMENT_LEAN = 0.6, FILAMENT_DROOP = 0.35;
+const FILAMENT_SPACING = 7, FILAMENT_LEAN = 0.6, FILAMENT_DROOP = 0.35;
 /** Floats per vertex: x y z | s u v part | lat */
 export const VERTEX_FLOATS = 8;
 export interface Mesh { readonly vertices: Float32Array; readonly indices: Uint32Array; }
