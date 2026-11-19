@@ -103,7 +103,11 @@ export const finThinning = (h: number): number => (1 - h) ** 2.4;
 // ---- legs: sprawling salamander stance. Angles are measured in the horizontal plane from OUT (straight away from the
 // body) towards FWD (the head), so 0 = straight out, + = forward. Lengths are fractions of L as seen from above. ----
 export interface LegSpec { readonly upper: number; readonly lower: number; readonly digitsAt: number; readonly digits: number; readonly spread: number; readonly len: readonly [number, number, number]; readonly radius: number; }
-export const FRONT_LEG: LegSpec = { upper: -30, lower: 55, digitsAt: 50, digits: 4, spread: 86, len: [0.05, 0.05, 0.045], radius: 11 };
+// The front leg is posed so that, seen from above, the forearm and hand come out behind the gill fronds instead of
+// lying under them: the elbow points back, the forearm reaches straight out and the hand is planted out to the side.
+// (Calculated: of the poses with at least a 60 degree bend at the elbow whose hand stays 6 px clear of the gills on
+// both sides, this is the one closest to the still picture's pose, which was upper -30, lower 55, digits at 50, spread 86.)
+export const FRONT_LEG: LegSpec = { upper: -60, lower: 0, digitsAt: 0, digits: 4, spread: 78, len: [0.05, 0.05, 0.045], radius: 11 };
 export const BACK_LEG: LegSpec = { upper: 30, lower: -60, digitsAt: 20, digits: 5, spread: 103, len: [0.052, 0.052, 0.05], radius: 12.5 };
 /** Radius of the eye beads (px). The still used 4.8 with ink bleeding around it; the live bead is crisp, so it is a little larger to read as beady. */
 export const EYE_RADIUS = 6.4;
@@ -137,7 +141,7 @@ export const GILL_PIECES = 20;
 /** The blade's half width along the frond, as a multiple of its width: flared where it grows out of the body, then a
  *  long taper to a soft point. Its half thickness as a fraction of its half width: fleshy at the body, thin at the tip. */
 const gillTaper = smoothCurve([[0, 1.9], [0.07, 1.3], [0.16, 1.02], [0.45, 0.92], [0.75, 0.62], [0.93, 0.3], [1, 0.1]]);
-const gillThickness = (t: number): number => 0.62 - 0.3 * sm(0.05, 0.7, t);
+const gillThickness = (t: number): number => 0.8 - 0.35 * sm(0.05, 0.7, t);
 /** How far the gill shows past the blade's rear and front edge (px). It widens steadily along the frond and narrows
  *  again at the tip, like a feather. The fronds of a side fan apart at about 18 degrees, so the gap between two
  *  neighbours also widens along them (about 5 px at 0.3 of the length, 14 px at the middle, 36 px at 0.8). The gills

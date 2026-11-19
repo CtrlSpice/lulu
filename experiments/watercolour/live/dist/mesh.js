@@ -14,10 +14,11 @@ import { SECTION_EXPONENT, finBaseHalfWidth, finThinning } from './model.js';
 export const PART = { body: 1, fin: 2, leg: 3, eye: 4, gill: 5, filament: 6 };
 /** Gill filaments under a frond: one every this many px along it, in two rows (towards the rear and towards the
  *  front). They lean this far towards the tip (0 = square to the frond).
- *  The two rows lie flat in the frond's own plane, just under its blade, so a frond and its gills are one thin leaf.
- *  The three leaves of a side rise at different angles from nearly the same place (upper steepest), so they never cut
- *  through each other: seen from above the upper leaf lies over the middle one, and the middle over the lower. */
-const FILAMENT_SPACING = 6.5, FILAMENT_LEAN = 0.6;
+ *  The two rows hang down and outward from under the blade, like the two sides of a low tent (GILL_HANG: how far
+ *  down for each px outward), so a frond has depth when seen from an angle. The three fronds of a side rise at
+ *  different angles from nearly the same place (upper steepest) and their gills are narrow near the head, so the
+ *  rows never cut through a neighbour: seen from above the upper frond lies over the middle one, and the middle over the lower. */
+const FILAMENT_SPACING = 6.5, FILAMENT_LEAN = 0.6, GILL_HANG = 0.85;
 /** Floats per vertex: x y z | s u v part | lat */
 export const VERTEX_FLOATS = 8;
 const AROUND = 28; // vertices around a body cross-section
@@ -157,9 +158,10 @@ export function buildMesh(a) {
             let before = -1;
             for (let k = 0; k <= m; k++) {
                 const t = k / m, p = gill.points[k], e = gill.across[k], d = gill.along[k], show = (edge === 1 ? gill.fringeRear : gill.fringeFront)[k];
-                const lean = FILAMENT_LEAN + 0.9 * t * t, dir = unit([e[0] * edge + d[0] * lean, e[1] * edge + d[1] * lean, e[2] * edge + d[2] * lean]);
+                const face = cross(e, d), up = face[2] >= 0 ? face : [-face[0], -face[1], -face[2]]; // the blade's upper face
+                const lean = FILAMENT_LEAN + 0.9 * t * t, dir = unit([e[0] * edge + d[0] * lean - up[0] * GILL_HANG, e[1] * edge + d[1] * lean - up[1] * GILL_HANG, e[2] * edge + d[2] * lean - up[2] * GILL_HANG]);
                 // the row starts under the middle of the blade and reaches "show" px past its edge
-                const under = gill.halfThick[k] * 0.6, start = [p[0], p[1], p[2] - under], reach = show > 0.5 ? gill.halfWidth[k] * 1.1 + show : 0, first = count();
+                const under = gill.halfThick[k] * 0.6, start = [p[0] - up[0] * under, p[1] - up[1] * under, p[2] - up[2] * under], reach = show > 0.5 ? (gill.halfWidth[k] * 1.1 + show) * Math.hypot(1, GILL_HANG) : 0, first = count();
                 push(start, t, t * filaments, 0, PART.filament, g * 2 + row);
                 push([start[0] + dir[0] * reach, start[1] + dir[1] * reach, start[2] + dir[2] * reach], t, t * filaments, 1, PART.filament, g * 2 + row);
                 if (before >= 0)

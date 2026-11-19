@@ -121,7 +121,7 @@ void main() {
     }
     outline *= smoothstep(0.05, 0.2, s);
     vec2 here = skin(root.x, root.y, abs(root.y) + 0.5 * s, flowed(vec2(root.x * uLength + 90.0 * s, root.w + sign(root.w) * 70.0 * s)));
-    paint = vec4(here.x, here.y + away * (0.14 * (0.5 - 0.5 * v) + 0.05 * s) + 0.8 * outline, 0.0, 1.0);
+    paint = vec4(here.x, here.y + away * (0.34 * smoothstep(0.1, -0.9, v) + 0.05 * s) + 0.8 * outline, 0.0, 1.0);
   } else {
     // the gill under the frond: a wine ground, the filaments drawn on it as fine light lines, and a light band around
     // its outer edge; the wine drifts along it
