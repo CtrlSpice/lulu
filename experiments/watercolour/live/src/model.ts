@@ -138,8 +138,12 @@ export const GILL_PIECES = 20;
  *  long taper to a soft point. Its half thickness as a fraction of its half width: fleshy at the body, thin at the tip. */
 const gillTaper = smoothCurve([[0, 1.9], [0.07, 1.3], [0.16, 1.02], [0.45, 0.92], [0.75, 0.62], [0.93, 0.3], [1, 0.1]]);
 const gillThickness = (t: number): number => 0.62 - 0.3 * sm(0.05, 0.7, t);
-/** How far the feathering shows past the blade's rear and front edge (px): none at the fleshy base, longest past the middle. */
-const gillFringe = (t: number, rear: boolean): number => (rear ? 23 : 15) * sm(0.08, 0.32, t) * (1 - 0.5 * sm(0.7, 1, t));
+/** How far the gill shows past the blade's rear and front edge (px). It widens steadily along the frond and narrows
+ *  again at the tip, like a feather. The fronds of a side fan apart at about 18 degrees, so the gap between two
+ *  neighbours also widens along them (about 5 px at 0.3 of the length, 14 px at the middle, 36 px at 0.8). The gills
+ *  are sized to fill that gap with only a few px to spare, so each frond's gill laps a little over its neighbour's
+ *  instead of burying it. */
+const gillFringe = (t: number, rear: boolean): number => (rear ? 20 : 16) * sm(0.05, 0.85, t) ** 1.2 * (1 - 0.45 * sm(0.8, 1, t));
 
 export interface Gill {
   readonly name: string;

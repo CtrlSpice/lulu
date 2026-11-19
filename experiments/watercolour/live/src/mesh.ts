@@ -14,8 +14,11 @@ import { type Axolotl, type Vec3, SECTION_EXPONENT, finBaseHalfWidth, finThinnin
 
 export const PART = { body: 1, fin: 2, leg: 3, eye: 4, gill: 5, filament: 6 } as const;
 /** Gill filaments under a frond: one every this many px along it, in two rows (towards the rear and towards the
- *  front). They lean this far towards the tip (0 = square to the frond) and hang this far below level. */
-const FILAMENT_SPACING = 6.5, FILAMENT_LEAN = 0.6, FILAMENT_DROOP = 0.35;
+ *  front). They lean this far towards the tip (0 = square to the frond).
+ *  The two rows lie flat in the frond's own plane, just under its blade, so a frond and its gills are one thin leaf.
+ *  The three leaves of a side rise at different angles from nearly the same place (upper steepest), so they never cut
+ *  through each other: seen from above the upper leaf lies over the middle one, and the middle over the lower. */
+const FILAMENT_SPACING = 6.5, FILAMENT_LEAN = 0.6;
 /** Floats per vertex: x y z | s u v part | lat */
 export const VERTEX_FLOATS = 8;
 export interface Mesh { readonly vertices: Float32Array; readonly indices: Uint32Array; }
@@ -128,9 +131,9 @@ export function buildMesh(a: Axolotl): Mesh {
       let before = -1;
       for (let k = 0; k <= m; k++) {
         const t = k / m, p = gill.points[k], e = gill.across[k], d = gill.along[k], show = (edge === 1 ? gill.fringeRear : gill.fringeFront)[k];
-        const lean = FILAMENT_LEAN + 0.9 * t * t, dir = unit([e[0] * edge + d[0] * lean, e[1] * edge + d[1] * lean, e[2] * edge + d[2] * lean - FILAMENT_DROOP]);
+        const lean = FILAMENT_LEAN + 0.9 * t * t, dir = unit([e[0] * edge + d[0] * lean, e[1] * edge + d[1] * lean, e[2] * edge + d[2] * lean]);
         // the row starts under the middle of the blade and reaches "show" px past its edge
-        const under = gill.halfThick[k] * 0.5, start: Vec3 = [p[0], p[1], p[2] - under], reach = show > 0.5 ? gill.halfWidth[k] * 1.1 + show : 0, first = count();
+        const under = gill.halfThick[k] * 0.6, start: Vec3 = [p[0], p[1], p[2] - under], reach = show > 0.5 ? gill.halfWidth[k] * 1.1 + show : 0, first = count();
         push(start, t, t * filaments, 0, PART.filament, g * 2 + row);
         push([start[0] + dir[0] * reach, start[1] + dir[1] * reach, start[2] + dir[2] * reach], t, t * filaments, 1, PART.filament, g * 2 + row);
         if (before >= 0) quad(before, before + 1, first + 1, first);
