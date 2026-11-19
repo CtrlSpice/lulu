@@ -105,6 +105,8 @@ export const finThinning = (h: number): number => (1 - h) ** 2.4;
 export interface LegSpec { readonly upper: number; readonly lower: number; readonly digitsAt: number; readonly digits: number; readonly spread: number; readonly len: readonly [number, number, number]; readonly radius: number; }
 export const FRONT_LEG: LegSpec = { upper: -30, lower: 55, digitsAt: 50, digits: 4, spread: 86, len: [0.05, 0.05, 0.045], radius: 11 };
 export const BACK_LEG: LegSpec = { upper: 30, lower: -60, digitsAt: 20, digits: 5, spread: 103, len: [0.052, 0.052, 0.05], radius: 12.5 };
+/** Radius of the eye beads (px). The still used 4.8 with ink bleeding around it; the live bead is crisp, so it is a little larger to read as beady. */
+export const EYE_RADIUS = 6.4;
 export const SHOULDER_AT = 0.24, HIP_AT = 0.52, STRIDE = 8;
 
 // ---- gills: three fronds on each side, growing side by side out of the edge of the head at its back corner (from its
@@ -289,5 +291,5 @@ export function buildAxolotl(pose: Pose = REST): Axolotl {
     gills.push({ name: `${spec.name} ${side === 1 ? 'left' : 'right'}`, side, root, points, along, across, halfWidth, halfThick, fringeRear, fringeFront });
   }
 
-  return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: 4.8, legs, gills, ground };
+  return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: EYE_RADIUS, legs, gills, ground };
 }

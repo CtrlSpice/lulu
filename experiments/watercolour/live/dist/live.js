@@ -169,6 +169,7 @@ async function start() {
         gl.uniform1f(uni(paper, 'uFlow'), settings.flow);
         gl.uniform1f(uni(paper, 'uZoom'), v.zoom);
         const eyes = axolotl.eyes.map(e => project(e, v));
+        gl.uniform1f(uni(paper, 'uEyeRadius'), axolotl.eyeRadius);
         gl.uniform2fv(uni(paper, 'uEye'), new Float32Array([eyes[0][0], eyes[0][1], eyes[1][0], eyes[1][1]]));
         screenPass(null);
     };

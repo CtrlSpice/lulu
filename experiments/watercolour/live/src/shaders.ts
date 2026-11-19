@@ -144,7 +144,7 @@ void main() {
 export const PAPER_FS = HEAD + NOISE + `
 uniform sampler2D uPaint, uCore, uWide, uInk;
 uniform vec3 uPaper; uniform vec2 uSize; uniform float uTime, uFlow, uZoom;
-uniform vec2 uEye[2];
+uniform vec2 uEye[2]; uniform float uEyeRadius;
 out vec4 colour;
 // one ink layer drying into the paper: it feathers outward along the fibres, dries darker at its rim, clouds, and
 // settles into the paper's tooth
@@ -172,7 +172,7 @@ void main() {
   if (bead > 0.0) {
     float eye = 3.6;
     for (int i = 0; i < 2; i++) {
-      vec2 rel = (p - uEye[i]) / (4.8 * uZoom);
+      vec2 rel = (p - uEye[i]) / (uEyeRadius * uZoom);
       if (length(rel) < 1.3) { eye *= 1.0 - 0.62 * smoothstep(0.1, 0.55, rel.y) * smoothstep(0.9, 0.55, length(rel)); eye *= mix(0.05, 1.0, smoothstep(0.2, 0.33, length(rel - vec2(-0.33, -0.4)))); }
     }
     wine = mix(wine, eye, bead);

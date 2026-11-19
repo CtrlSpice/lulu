@@ -135,6 +135,7 @@ async function start(): Promise<void> {
     gl.uniform3f(uni(paper, 'uPaper'), tables.paperLin[0], tables.paperLin[1], tables.paperLin[2]); gl.uniform2f(uni(paper, 'uSize'), WIDTH, HEIGHT);
     gl.uniform1f(uni(paper, 'uTime'), clock); gl.uniform1f(uni(paper, 'uFlow'), settings.flow); gl.uniform1f(uni(paper, 'uZoom'), v.zoom);
     const eyes = axolotl.eyes.map(e => project(e, v));
+    gl.uniform1f(uni(paper, 'uEyeRadius'), axolotl.eyeRadius);
     gl.uniform2fv(uni(paper, 'uEye'), new Float32Array([eyes[0][0], eyes[0][1], eyes[1][0], eyes[1][1]]));
     screenPass(null);
   };
