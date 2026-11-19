@@ -67,11 +67,12 @@ vec2 skin(float s, float across, float c, vec2 Pf) {
   float dark = smoothstep(0.06, 0.13, s) * (1.0 - smoothstep(0.80, 0.95, s)) * bump(0.0, 0.36, c) * (0.4 + 1.1 * blot) * 1.25;
   // costal grooves: the fine creases down each flank between the front and back legs, one per rib. They belong to the
   // body, so they do not drift with the paint. Each leans back a little as it goes down the side, and they fade out
-  // towards the centre of the back and under the belly. The grooves nearest the legs are the faintest.
+  // under the belly. Upwards they stop about two thirds of the way out from the spine to the widest point of the side
+  // (the line the user drew on the top view: 0.64 to 0.68), so the back stays clear. The grooves nearest the legs are the faintest.
   float groove = (s - 0.004 * (c - 0.9) - GROOVE_FIRST) / GROOVE_STEP;
   float crease = 1.0 - smoothstep(0.5, 1.9, abs(fract(groove + 0.5) - 0.5) * GROOVE_STEP * uLength); // 1 on a crease, fading over about 2 px
   float fromMiddle = abs(floor(groove + 0.5) - 0.5 * (GROOVES - 1.0)) / (0.5 * (GROOVES - 1.0)); // 0 for the middle groove, 1 for the first and last
-  float grooves = crease * step(-0.5, groove) * step(groove, GROOVES - 0.5) * smoothstep(0.3, 0.6, c) * (1.0 - smoothstep(1.35, 1.75, c)) * (1.0 - 0.7 * fromMiddle * fromMiddle);
+  float grooves = crease * step(-0.5, groove) * step(groove, GROOVES - 0.5) * smoothstep(0.64, 0.74, c) * (1.0 - smoothstep(1.35, 1.75, c)) * (1.0 - 0.7 * fromMiddle * fromMiddle);
   return vec2(base, mid + dark + 0.17 * grooves);
 }
 void main() {
