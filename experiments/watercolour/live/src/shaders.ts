@@ -42,11 +42,6 @@ void main() {
   int part = int(vData.w + 0.5);
   // fin: how fast "height up the fin" changes from one pixel to the next (its inverse is the fin's height on screen)
   float rate = part == 2 ? fwidth(vData.z) : 0.0;
-  if (part == 6) { // gill filaments: they lie side by side as one sheet; each has its own length and narrows to a point over its last third
-    float which = floor(vData.y), across = abs(fract(vData.y) - 0.5) * 2.0;
-    float reach = 0.7 + 0.3 * fract(sin(which * 12.9898 + vLat * 78.233) * 43758.5453);
-    if (vData.z > reach || across > mix(1.3, 0.2, smoothstep(0.62, 1.0, vData.z / reach))) discard;
-  }
   where0 = vData; where1 = vec4(vLat, vDepth, rate, 1.0);
 }`;
 
@@ -112,11 +107,12 @@ void main() {
     vec2 here = skin(root.x, root.y, abs(root.y) + 0.5 * s, flowed(vec2(root.x * uLength + 90.0 * s, root.w + sign(root.w) * 70.0 * s)));
     paint = vec4(here.x, here.y + away * (0.14 * (0.5 - 0.5 * v) + 0.05 * s) + 0.8 * outline, 0.0, 1.0);
   } else {
-    // gill filaments under the frond: wine, with a fine light line between one filament and the next; a little paler
-    // towards their tips; the colour drifts along them
+    // the gill under the frond: a wine ground, the filaments drawn on it as fine light lines, and a light band around
+    // its outer edge; the wine drifts along it
     float drift = fbm(vec2(u * 0.3 + lat * 7.0, v * 2.0 - uTime * 0.1 * uFlow), 3);
-    float line = smoothstep(0.58, 0.8, abs(fract(u) - 0.5) * 2.0);
-    paint = vec4(mix(0.06, 0.13, line), mix((1.05 - 0.35 * v) * (0.75 + 0.5 * drift), 0.03, line), 0.0, 1.0);
+    float line = 0.85 * (1.0 - smoothstep(0.08, 0.3, abs(fract(u) - 0.5) * 2.0)), band = smoothstep(0.8, 0.88, v);
+    float light = max(line, band);
+    paint = vec4(mix(0.06, 0.14, light), mix(1.15 * (0.8 + 0.4 * drift), 0.02, light), 0.0, 1.0);
   }
 }`;
 

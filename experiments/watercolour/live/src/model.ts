@@ -137,7 +137,7 @@ export const GILL_PIECES = 20;
 const gillTaper = smoothCurve([[0, 1.9], [0.07, 1.3], [0.16, 1.02], [0.45, 0.92], [0.75, 0.62], [0.93, 0.3], [1, 0.1]]);
 const gillThickness = (t: number): number => 0.62 - 0.3 * sm(0.05, 0.7, t);
 /** How far the feathering shows past the blade's rear and front edge (px): none at the fleshy base, longest past the middle. */
-const gillFringe = (t: number, rear: boolean): number => (rear ? 17 : 11) * sm(0.08, 0.32, t) * (1 - 0.5 * sm(0.7, 1, t));
+const gillFringe = (t: number, rear: boolean): number => (rear ? 23 : 15) * sm(0.08, 0.32, t) * (1 - 0.5 * sm(0.7, 1, t));
 
 export interface Gill {
   readonly name: string;
