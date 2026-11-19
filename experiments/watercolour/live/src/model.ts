@@ -144,7 +144,7 @@ export const GILL_SOFTEN = 22;
 export const GILL_PIECES = 20;
 /** The blade's half width along the frond, as a multiple of its width: flared where it grows out of the body, then a
  *  long taper to a soft point. Its half thickness as a fraction of its half width: fleshy at the body, thin at the tip. */
-const gillTaper = smoothCurve([[0, 1.5], [0.07, 1.22], [0.16, 1.02], [0.45, 0.92], [0.75, 0.62], [0.93, 0.3], [1, 0.1]]);
+const gillTaper = smoothCurve([[0, 1.2], [0.07, 1.12], [0.16, 1.02], [0.45, 0.92], [0.75, 0.62], [0.93, 0.3], [1, 0.1]]);
 const gillThickness = (t: number): number => 0.8 - 0.35 * sm(0.05, 0.7, t);
 /** How far the gill shows past the blade's rear and front edge (px). It widens steadily along the frond and narrows
  *  again at the tip, like a feather. The fronds of a side fan apart at about 18 degrees, so the gap between two
@@ -159,6 +159,10 @@ export interface Gill {
   /** Where on the body the frond grows from, in the skin's own coordinates: position along (0 to 1), across
    *  (-1 to 1), up (0 to 1), and px across from the midline. The frond's skin continues the body's from there. */
   readonly root: readonly [number, number, number, number];
+  /** How the frond runs over the body near its base, seen from above: px towards the tail and px outward for each
+   *  whole frond length, and the blade's half width in px. With "root" this places every point of the frond's base
+   *  on the body's skin, so the base can be painted with exactly the skin it grows out of. */
+  readonly run: readonly [number, number, number];
   /** The frond's centre line from the body's surface to the tip. At each point: its direction, and the level
    *  direction across the blade towards its rear edge (both unit). */
   readonly points: readonly Vec3[];
@@ -300,7 +304,9 @@ export function buildAxolotl(pose: Pose = REST): Axolotl {
       if (k < GILL_PIECES) { const m = heading((k + 0.5) / GILL_PIECES), p = points[k]; points.push([p[0] + m[0] * piece, p[1] + m[1] * piece, p[2] + m[2] * piece]); }
     }
     const root = [arc[j] / L, side * squared(Math.cos(rad(spec.around))), squared(Math.sin(rad(spec.around))), side * lat] as const;
-    gills.push({ name: `${spec.name} ${side === 1 ? 'left' : 'right'}`, side, root, points, along, across, halfWidth, halfThick, fringeRear, fringeFront });
+    const early = Math.round(GILL_PIECES / 4), ex = points[early][0] - points[0][0], ey = points[early][1] - points[0][1], per = GILL_PIECES / early;
+    const run = [(ex * back[0] + ey * back[1]) * per, (ex * out[0] + ey * out[1]) * per, spec.width] as const;
+    gills.push({ name: `${spec.name} ${side === 1 ? 'left' : 'right'}`, side, root, run, points, along, across, halfWidth, halfThick, fringeRear, fringeFront });
   }
 
   return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: EYE_RADIUS, legs, gills, ground };

@@ -53,6 +53,7 @@ export const PAINT_FS = HEAD + NOISE + `
 uniform sampler2D uWhere0, uWhere1;
 uniform float uTime, uFlow, uLength;
 uniform vec4 uGillRoot[6]; // where on the body each gill frond grows from: along, across, up, px across
+uniform vec4 uGillRun[6];  // how each frond runs over the body near its base: px towards the tail and px outward per frond length, blade half width in px
 out vec4 paint; // r = pink body ink, g = wine ink, b = 1 on an eye, a = 1 where there is animal
 float backStrength(float s) { return 0.2 + 0.8 * smoothstep(0.03, 0.12, s) * (1.0 - 0.5 * smoothstep(0.55, 0.85, s)) - 0.3 * smoothstep(0.88, 1.0, s); }
 // the paint drifts and swirls slowly in the animal's own coordinates (px along, px across)
@@ -66,7 +67,8 @@ const float GROOVES = 13.0, GROOVE_FIRST = 0.258, GROOVE_STEP = (0.502 - 0.258) 
 // her skin at a place on the body: x = pink wash, y = wine (the soft wash down the back plus the blotches).
 // s: along the body; across: -1 to 1; c: how far round from the centre line of the back (0 on it, 1 at the flank, up
 // to 2 under the belly); Pf: that place in px, after the paint's drift
-vec2 skin(float s, float across, float c, vec2 Pf) {
+// creases: 1 on the body, 0 where the skin carries on past the body (a gill frond has no costal grooves)
+vec2 skin(float s, float across, float c, vec2 Pf, float creases) {
   float base = 0.22 + 0.07 * across * across + 0.06 * bump(0.25, 0.2, s);
   float mid = backStrength(s) * (1.0 - smoothstep(0.45, 1.15, c)) * 0.5 * (0.75 + 0.5 * fbm(Pf / 45.0, 3)); // the band of mid-tone markings: wide across the back, then an ombre fade down each side, gone by the widest point so the lower half stays pink
   float stainNoise = fbm(Pf / 26.0 + vec2(5.0, 0.0), 4), blot = smoothstep(0.42, 0.62, stainNoise);
@@ -84,7 +86,7 @@ vec2 skin(float s, float across, float c, vec2 Pf) {
   float crease = 1.0 - smoothstep(0.5, 1.9, abs(fract(groove + 0.5) - 0.5) * GROOVE_STEP * uLength); // 1 on a crease, fading over about 2 px
   float fromMiddle = abs(floor(groove + 0.5) - 0.5 * (GROOVES - 1.0)) / (0.5 * (GROOVES - 1.0)); // 0 for the middle groove, 1 for the first and last
   float grooves = crease * step(-0.5, groove) * step(groove, GROOVES - 0.5) * smoothstep(0.64, 0.74, c) * (1.0 - smoothstep(1.35, 1.75, c)) * (1.0 - 0.7 * fromMiddle * fromMiddle);
-  return vec2(base, mid + dark + stains + 0.17 * grooves);
+  return vec2(base, mid + dark + stains + 0.17 * grooves * creases);
 }
 void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
@@ -94,11 +96,11 @@ void main() {
   if (part == 0) return;
   if (part == 1 || part == 4) {
     // body, and the eyes (the skin's paint continues under an eye; the bead itself is added on the paper)
-    paint = vec4(skin(s, u, v >= 0.0 ? abs(u) : 2.0 - abs(u), flowed(vec2(s * uLength, lat))), part == 4 ? 1.0 : 0.0, 1.0);
+    paint = vec4(skin(s, u, v >= 0.0 ? abs(u) : 2.0 - abs(u), flowed(vec2(s * uLength, lat)), 1.0), part == 4 ? 1.0 : 0.0, 1.0);
   } else if (part == 2) {
     // fin: body-coloured and fleshy where it joins the body, thinning to a pale see-through membrane with a fine dark
     // line along its free edge
-    vec2 Pf = flowed(vec2(s * uLength, lat)), here = skin(s, u, abs(u), Pf);
+    vec2 Pf = flowed(vec2(s * uLength, lat)), here = skin(s, u, abs(u), Pf, 1.0);
     float h = abs(v) - 1.0, tall = 1.0 / max(w1.z, 1e-3); // h: 0 at the base, 1 at the free edge; tall: the fin's height on screen in px
     float thin = smoothstep(0.02, 0.3, h);
     float margin = (1.0 - smoothstep(1.0, 2.6, (1.0 - h) * tall)) * mix(0.45, 1.0, smoothstep(5.0, 14.0, tall));
@@ -107,8 +109,10 @@ void main() {
   } else if (part == 3) {
     paint = vec4(0.0, 0.95 + 0.35 * (0.5 - 0.5 * v), 0.0, 1.0); // leg: a dark stick, a little darker underneath
   } else if (part == 5) {
-    // gill frond: the head's skin carried outward. It is painted as the skin at the place it grows from, moving
-    // steadily away from the back, so there is no break in colour where it leaves the body. Only its form is added:
+    // gill frond: the head's skin carried outward. Every point of the frond is painted with the body's skin at the
+    // spot it lies over (worked out from where the frond grows and how it runs over the body), and beyond the body's
+    // edge the skin simply carries on outward. So where a frond's base sits on the head the two are the same paint,
+    // with no patch and no break in colour. Only its form is added:
     // a little darker underneath, and a fine wine outline wherever the frond's edge is seen against something else
     // (the paper, the body, a leg, another frond). The outline fades out at the base, where frond and head are one skin.
     vec4 root = uGillRoot[int(lat + 0.5)];
@@ -120,7 +124,13 @@ void main() {
       if (other) outline = max(outline, i < 4 ? 1.0 : i < 8 ? 0.8 : 0.55);
     }
     outline *= smoothstep(0.05, 0.2, s);
-    vec2 here = skin(root.x, root.y, abs(root.y) + 0.5 * s, flowed(vec2(root.x * uLength + 90.0 * s, root.w + sign(root.w) * 70.0 * s)));
+    vec4 run = uGillRun[int(lat + 0.5)];
+    vec2 heading = normalize(run.xy); // x: towards the tail, y: outward
+    float wide = run.z * mix(1.2, 1.0, smoothstep(0.0, 0.16, s)) * (1.0 - 0.7 * smoothstep(0.45, 1.0, s)); // the blade's half width here, px
+    float along = root.x * uLength + run.x * s + u * wide * heading.y;  // px from the snout along the body
+    float outward = abs(root.w) + run.y * s - u * wide * heading.x;     // px out from the midline
+    float round_ = outward * abs(root.y / root.w);                      // the same measure as on the body: 1 at its widest point
+    vec2 here = skin(along / uLength, min(round_, 1.0), round_, flowed(vec2(along, sign(root.w) * outward)), 0.0);
     paint = vec4(here.x, here.y + away * (0.34 * smoothstep(0.1, -0.9, v) + 0.05 * s) + 0.8 * outline, 0.0, 1.0);
   } else {
     // the gill under the frond: a wine ground, the filaments drawn on it as fine light lines, and a light band around

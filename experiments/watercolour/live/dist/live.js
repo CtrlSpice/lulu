@@ -153,6 +153,7 @@ async function start() {
         gl.uniform1f(uni(paint, 'uFlow'), settings.flow);
         gl.uniform1f(uni(paint, 'uLength'), axolotl.L);
         gl.uniform4fv(uni(paint, 'uGillRoot'), new Float32Array(axolotl.gills.flatMap(g => [...g.root])));
+        gl.uniform4fv(uni(paint, 'uGillRun'), new Float32Array(axolotl.gills.flatMap(g => [...g.run, 0])));
         screenPass(painted.fbo);
         // 3. the paint spreads: a tight blur and a wide one
         blurInto(painted.textures[0], core, 2);
