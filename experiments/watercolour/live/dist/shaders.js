@@ -63,8 +63,13 @@ const float GROOVES = 13.0, GROOVE_FIRST = 0.258, GROOVE_STEP = (0.502 - 0.258) 
 vec2 skin(float s, float across, float c, vec2 Pf) {
   float base = 0.22 + 0.07 * across * across + 0.06 * bump(0.25, 0.2, s);
   float mid = backStrength(s) * (1.0 - smoothstep(0.45, 1.15, c)) * 0.5 * (0.75 + 0.5 * fbm(Pf / 45.0, 3)); // the band of mid-tone markings: wide across the back, then an ombre fade down each side, gone by the widest point so the lower half stays pink
-  float blot = smoothstep(0.42, 0.62, fbm(Pf / 26.0 + vec2(5.0, 0.0), 4));
+  float stainNoise = fbm(Pf / 26.0 + vec2(5.0, 0.0), 4), blot = smoothstep(0.42, 0.62, stainNoise);
   float dark = smoothstep(0.06, 0.13, s) * (1.0 - smoothstep(0.80, 0.95, s)) * bump(0.0, 0.36, c) * (0.4 + 1.1 * blot) * 1.25;
+  // a few more wine stains in a row down each side, between the dark band on the back and the top of the costal
+  // grooves (where the user drew them: 0.39 to 0.68 of the way from the spine to the side, from the back of the head to
+  // the base of the tail). They are the strongest spots of the same blotch pattern, so they sit with the others.
+  float row = smoothstep(0.3, 0.42, c) * (1.0 - smoothstep(0.6, 0.72, c)) * smoothstep(0.1, 0.16, s) * (1.0 - smoothstep(0.6, 0.68, s));
+  float stains = 1.0 * row * smoothstep(0.63, 0.73, stainNoise);
   // costal grooves: the fine creases down each flank between the front and back legs, one per rib. They belong to the
   // body, so they do not drift with the paint. Each leans back a little as it goes down the side, and they fade out
   // under the belly. Upwards they stop about two thirds of the way out from the spine to the widest point of the side
@@ -73,7 +78,7 @@ vec2 skin(float s, float across, float c, vec2 Pf) {
   float crease = 1.0 - smoothstep(0.5, 1.9, abs(fract(groove + 0.5) - 0.5) * GROOVE_STEP * uLength); // 1 on a crease, fading over about 2 px
   float fromMiddle = abs(floor(groove + 0.5) - 0.5 * (GROOVES - 1.0)) / (0.5 * (GROOVES - 1.0)); // 0 for the middle groove, 1 for the first and last
   float grooves = crease * step(-0.5, groove) * step(groove, GROOVES - 0.5) * smoothstep(0.64, 0.74, c) * (1.0 - smoothstep(1.35, 1.75, c)) * (1.0 - 0.7 * fromMiddle * fromMiddle);
-  return vec2(base, mid + dark + 0.17 * grooves);
+  return vec2(base, mid + dark + stains + 0.17 * grooves);
 }
 void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
