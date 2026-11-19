@@ -112,11 +112,15 @@ export const GILLS = [
 ];
 /** Degrees a frond turns towards the tail, and levels off, between its root and its tip. */
 export const GILL_SWEEP = 30, GILL_LEVEL = 14;
+/** A frond leaves the head this many degrees closer to the line of the body than its sweep alone would give, and
+ *  eases out to its full angle over the first 0.4 of its length. So it flows out of the head's edge in a soft curve
+ *  instead of turning out sharply, and no notch is left between its base and the body. */
+export const GILL_SOFTEN = 22;
 /** How many straight pieces a frond is built from. */
 export const GILL_PIECES = 20;
 /** The blade's half width along the frond, as a multiple of its width: flared where it grows out of the body, then a
  *  long taper to a soft point. Its half thickness as a fraction of its half width: fleshy at the body, thin at the tip. */
-const gillTaper = smoothCurve([[0, 1.9], [0.07, 1.3], [0.16, 1.02], [0.45, 0.92], [0.75, 0.62], [0.93, 0.3], [1, 0.1]]);
+const gillTaper = smoothCurve([[0, 1.5], [0.07, 1.22], [0.16, 1.02], [0.45, 0.92], [0.75, 0.62], [0.93, 0.3], [1, 0.1]]);
 const gillThickness = (t) => 0.8 - 0.35 * sm(0.05, 0.7, t);
 /** How far the gill shows past the blade's rear and front edge (px). It widens steadily along the frond and narrows
  *  again at the tip, like a feather. The fronds of a side fan apart at about 18 degrees, so the gap between two
@@ -212,7 +216,7 @@ export function buildAxolotl(pose = REST) {
             const j = stationAt(arc, spec.at), out = [side * normal[j][0], side * normal[j][1]], back = tangent[j];
             const zc = (top[j] + bottom[j]) / 2, hh = (top[j] - bottom[j]) / 2, lat = HALF_PX[j] * squared(Math.cos(rad(spec.around)));
             const heading = (t) => {
-                const az = rad(spec.out + GILL_SWEEP * (0.5 - t)), el = rad(spec.rise + GILL_LEVEL * (0.5 - t)), c = Math.cos(el);
+                const az = rad(spec.out + GILL_SWEEP * (0.5 - t) - GILL_SOFTEN * (1 - sm(0, 0.4, t))), el = rad(spec.rise + GILL_LEVEL * (0.5 - t)), c = Math.cos(el);
                 return [(back[0] * Math.cos(az) + out[0] * Math.sin(az)) * c, (back[1] * Math.cos(az) + out[1] * Math.sin(az)) * c, Math.sin(el)];
             };
             const points = [[spine[j][0] + out[0] * lat, spine[j][1] + out[1] * lat, zc + hh * squared(Math.sin(rad(spec.around)))]];
