@@ -90,11 +90,30 @@ const halfWidthCurve = smoothCurve(HALF_WIDTH), topCurve = smoothCurve(TOP), bot
 const finTopCurve = smoothCurve(FIN_TOP), finBottomCurve = smoothCurve(FIN_BOTTOM);
 /** Exponent of the cross-section: 2 is an ellipse, larger is squarer. Axolotls are flat-backed, so a little squarer. */
 export const SECTION_EXPONENT = 2.3;
-/** Half width (px) of the fin's base, which is the pale ridge seen from above. */
+/** Half width (px) of the fin's crest, the pale ridge seen from above. The fin's fleshy base is wider: finBaseHalfWidth. */
 export const finRidgeHalfWidth = (s) => (1.4 + 2.6 * sm(0.52, 0.72, s)) * sm(0.20, 0.27, s) * (1 - 0.5 * sm(0.94, 1, s));
+/** Half width (px) of the fin where it joins the body. The fin is thick and fleshy there and thins quickly to a membrane. */
+export const finBaseHalfWidth = (s) => 2.2 * finRidgeHalfWidth(s) + 2.5 * sm(0.20, 0.27, s);
+/** How the fin thins with height: its half width at height h (0 = base, 1 = free edge), as a fraction of the base. */
+export const finThinning = (h) => (1 - h) ** 2.4;
 export const FRONT_LEG = { upper: -30, lower: 55, digitsAt: 50, digits: 4, spread: 86, len: [0.05, 0.05, 0.045], radius: 11 };
 export const BACK_LEG = { upper: 30, lower: -60, digitsAt: 20, digits: 5, spread: 103, len: [0.052, 0.052, 0.05], radius: 12.5 };
 export const SHOULDER_AT = 0.24, HIP_AT = 0.52, STRIDE = 8;
+export const GILLS = [
+    { name: 'upper', at: 0.190, around: 16, out: 14, rise: 40, length: 0.105, width: 10.5 },
+    { name: 'middle', at: 0.176, around: 12, out: 33, rise: 26, length: 0.122, width: 11 },
+    { name: 'lower', at: 0.162, around: 8, out: 50, rise: 12, length: 0.118, width: 10.5 },
+];
+/** Degrees a frond turns towards the tail, and levels off, between its root and its tip. */
+export const GILL_SWEEP = 30, GILL_LEVEL = 14;
+/** How many straight pieces a frond is built from. */
+export const GILL_PIECES = 20;
+/** The blade's half width along the frond, as a multiple of its width: flared where it grows out of the body, then a
+ *  long taper to a soft point. Its half thickness as a fraction of its half width: fleshy at the body, thin at the tip. */
+const gillTaper = smoothCurve([[0, 1.9], [0.07, 1.3], [0.16, 1.02], [0.45, 0.92], [0.75, 0.62], [0.93, 0.3], [1, 0.1]]);
+const gillThickness = (t) => 0.62 - 0.3 * sm(0.05, 0.7, t);
+/** How far the feathering shows past the blade's rear and front edge (px): none at the fleshy base, longest past the middle. */
+const gillFringe = (t, rear) => (rear ? 17 : 11) * sm(0.08, 0.32, t) * (1 - 0.5 * sm(0.7, 1, t));
 export const REST = { wave: 0, phase: 0 };
 const REST_SPINE = restSpine();
 const REST_ARC = (() => { const a = [0]; for (let i = 1; i < REST_SPINE.length; i++)
@@ -174,5 +193,35 @@ export function buildAxolotl(pose = REST) {
     leg('front right', SHOULDER_AT, -1, -STRIDE, FRONT_LEG);
     leg('back left', HIP_AT, 1, -STRIDE, BACK_LEG);
     leg('back right', HIP_AT, -1, STRIDE, BACK_LEG);
-    return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: 4.8, legs, ground };
+    // gills
+    const unit3 = (p) => { const l = Math.hypot(p[0], p[1], p[2]) || 1; return [p[0] / l, p[1] / l, p[2] / l]; };
+    const squared = (x) => Math.sign(x) * Math.abs(x) ** (2 / SECTION_EXPONENT);
+    const gills = [];
+    for (const side of [1, -1])
+        for (const spec of GILLS) {
+            const j = stationAt(arc, spec.at), out = [side * normal[j][0], side * normal[j][1]], back = tangent[j];
+            const zc = (top[j] + bottom[j]) / 2, hh = (top[j] - bottom[j]) / 2, lat = HALF_PX[j] * squared(Math.cos(rad(spec.around)));
+            const heading = (t) => {
+                const az = rad(spec.out + GILL_SWEEP * (0.5 - t)), el = rad(spec.rise + GILL_LEVEL * (0.5 - t)), c = Math.cos(el);
+                return [(back[0] * Math.cos(az) + out[0] * Math.sin(az)) * c, (back[1] * Math.cos(az) + out[1] * Math.sin(az)) * c, Math.sin(el)];
+            };
+            const points = [[spine[j][0] + out[0] * lat, spine[j][1] + out[1] * lat, zc + hh * squared(Math.sin(rad(spec.around)))]];
+            const along = [], across = [], halfWidth = [], halfThick = [], fringeRear = [], fringeFront = [], piece = spec.length * L / GILL_PIECES;
+            for (let k = 0; k <= GILL_PIECES; k++) {
+                const t = k / GILL_PIECES, d = heading(t), level = unit3([-d[1], d[0], 0]), rear = level[0] * back[0] + level[1] * back[1] >= 0 ? 1 : -1;
+                along.push(d);
+                across.push([level[0] * rear, level[1] * rear, 0]);
+                halfWidth.push(spec.width * gillTaper(t));
+                halfThick.push(spec.width * gillTaper(t) * gillThickness(t));
+                fringeRear.push(gillFringe(t, true));
+                fringeFront.push(gillFringe(t, false));
+                if (k < GILL_PIECES) {
+                    const m = heading((k + 0.5) / GILL_PIECES), p = points[k];
+                    points.push([p[0] + m[0] * piece, p[1] + m[1] * piece, p[2] + m[2] * piece]);
+                }
+            }
+            const root = [arc[j] / L, side * squared(Math.cos(rad(spec.around))), squared(Math.sin(rad(spec.around))), side * lat];
+            gills.push({ name: `${spec.name} ${side === 1 ? 'left' : 'right'}`, side, root, points, along, across, halfWidth, halfThick, fringeRear, fringeFront });
+        }
+    return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: 4.8, legs, gills, ground };
 }

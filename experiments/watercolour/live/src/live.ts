@@ -125,6 +125,7 @@ async function start(): Promise<void> {
     gl.useProgram(paint);
     bind(0, where.textures[0], paint, 'uWhere0'); bind(1, where.textures[1], paint, 'uWhere1');
     gl.uniform1f(uni(paint, 'uTime'), clock); gl.uniform1f(uni(paint, 'uFlow'), settings.flow); gl.uniform1f(uni(paint, 'uLength'), axolotl.L);
+    gl.uniform4fv(uni(paint, 'uGillRoot'), new Float32Array(axolotl.gills.flatMap(g => [...g.root])));
     screenPass(painted.fbo);
     // 3. the paint spreads: a tight blur and a wide one
     blurInto(painted.textures[0], core, 2); blurInto(painted.textures[0], wide, 9);

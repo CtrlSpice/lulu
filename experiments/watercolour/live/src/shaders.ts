@@ -37,8 +37,18 @@ void main() {
 export const GEOMETRY_FS = HEAD + `
 in vec4 vData; in float vLat; in float vDepth;
 layout(location = 0) out vec4 where0; // s, u, v, part
-layout(location = 1) out vec4 where1; // lat, depth
-void main() { where0 = vData; where1 = vec4(vLat, vDepth, 0.0, 1.0); }`;
+layout(location = 1) out vec4 where1; // lat, depth, rate
+void main() {
+  int part = int(vData.w + 0.5);
+  // fin: how fast "height up the fin" changes from one pixel to the next (its inverse is the fin's height on screen)
+  float rate = part == 2 ? fwidth(vData.z) : 0.0;
+  if (part == 6) { // gill filaments: keep the filaments, drop the gaps between them. Each filament narrows to its tip and has its own length.
+    float which = floor(vData.y), across = abs(fract(vData.y) - 0.5) * 2.0;
+    float reach = 0.7 + 0.3 * fract(sin(which * 12.9898 + vLat * 78.233) * 43758.5453);
+    if (vData.z > reach || across > mix(0.62, 0.16, vData.z / reach)) discard;
+  }
+  where0 = vData; where1 = vec4(vLat, vDepth, rate, 1.0);
+}`;
 
 /** One big triangle covering the screen. */
 export const SCREEN_VS = HEAD + `
@@ -47,28 +57,65 @@ void main() { vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2
 export const PAINT_FS = HEAD + NOISE + `
 uniform sampler2D uWhere0, uWhere1;
 uniform float uTime, uFlow, uLength;
+uniform vec4 uGillRoot[6]; // where on the body each gill frond grows from: along, across, up, px across
 out vec4 paint; // r = pink body ink, g = wine ink, b = 1 on an eye, a = 1 where there is animal
 float backStrength(float s) { return 0.2 + 0.8 * smoothstep(0.03, 0.12, s) * (1.0 - 0.5 * smoothstep(0.55, 0.85, s)) - 0.3 * smoothstep(0.88, 1.0, s); }
+// the paint drifts and swirls slowly in the animal's own coordinates (px along, px across)
+vec2 flowed(vec2 P) {
+  vec2 swirl = vec2(fbm(P / 90.0 + vec2(0.0, uTime * 0.05), 3), fbm(P / 90.0 + vec2(31.0, -uTime * 0.04), 3)) - 0.5;
+  return P + uFlow * (40.0 * swirl + vec2(uTime * 3.0, 0.0));
+}
+// her skin at a place on the body: x = pink wash, y = wine (the soft wash down the back plus the blotches).
+// s: along the body; across: -1 to 1; c: how far round from the centre line of the back (0 on it, 1 at the flank, up
+// to 2 under the belly); Pf: that place in px, after the paint's drift
+vec2 skin(float s, float across, float c, vec2 Pf) {
+  float base = 0.22 + 0.07 * across * across + 0.06 * bump(0.25, 0.2, s);
+  float mid = backStrength(s) * (1.0 - smoothstep(0.15, 0.85, c)) * 0.5 * (0.75 + 0.5 * fbm(Pf / 45.0, 3));
+  float blot = smoothstep(0.42, 0.62, fbm(Pf / 26.0 + vec2(5.0, 0.0), 4));
+  float dark = smoothstep(0.06, 0.13, s) * (1.0 - smoothstep(0.80, 0.95, s)) * bump(0.0, 0.36, c) * (0.4 + 1.1 * blot) * 1.25;
+  return vec2(base, mid + dark);
+}
 void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
   vec4 w0 = texelFetch(uWhere0, px, 0), w1 = texelFetch(uWhere1, px, 0);
   float s = w0.x, u = w0.y, v = w0.z, lat = w1.x; int part = int(w0.w + 0.5);
   paint = vec4(0.0);
   if (part == 0) return;
-  // the animal's own coordinates in px (along, across); the paint drifts and swirls slowly in them
-  vec2 P = vec2(s * uLength, lat);
-  vec2 swirl = vec2(fbm(P / 90.0 + vec2(0.0, uTime * 0.05), 3), fbm(P / 90.0 + vec2(31.0, -uTime * 0.04), 3)) - 0.5;
-  vec2 Pf = P + uFlow * (40.0 * swirl + vec2(uTime * 3.0, 0.0));
-  // c: how far round from the centre line of the back: 0 on the line, 1 at the flank, up to 2 under the belly
-  float c = v >= 0.0 ? abs(u) : 2.0 - abs(u);
-  float base = 0.22 + 0.07 * u * u + 0.06 * bump(0.25, 0.2, s);
-  float mid = backStrength(s) * (1.0 - smoothstep(0.15, 0.85, c)) * 0.5 * (0.75 + 0.5 * fbm(Pf / 45.0, 3));
-  float blot = smoothstep(0.42, 0.62, fbm(Pf / 26.0 + vec2(5.0, 0.0), 4));
-  float dark = smoothstep(0.06, 0.13, s) * (1.0 - smoothstep(0.80, 0.95, s)) * bump(0.0, 0.36, c) * (0.4 + 1.1 * blot) * 1.25;
-  if (part == 1) paint = vec4(base, mid + dark, 0.0, 1.0);
-  else if (part == 2) { float h = abs(v) - 1.0; paint = vec4(0.18 * (1.0 - 0.3 * h), 0.06 + 0.22 * smoothstep(0.7, 1.0, h) + 0.2 * mid, 0.0, 1.0); } // fin: pale, see-through, a fine darker edge
-  else if (part == 3) paint = vec4(0.0, 0.95 + 0.35 * (0.5 - 0.5 * v), 0.0, 1.0); // leg: a dark stick, a little darker underneath
-  else paint = vec4(0.0, 4.0, 1.0, 1.0); // eye
+  if (part == 1 || part == 4) {
+    // body, and the eyes (the skin's paint continues under an eye; the bead itself is added on the paper)
+    paint = vec4(skin(s, u, v >= 0.0 ? abs(u) : 2.0 - abs(u), flowed(vec2(s * uLength, lat))), part == 4 ? 1.0 : 0.0, 1.0);
+  } else if (part == 2) {
+    // fin: body-coloured and fleshy where it joins the body, thinning to a pale see-through membrane with a fine dark
+    // line along its free edge
+    vec2 Pf = flowed(vec2(s * uLength, lat)), here = skin(s, u, abs(u), Pf);
+    float h = abs(v) - 1.0, tall = 1.0 / max(w1.z, 1e-3); // h: 0 at the base, 1 at the free edge; tall: the fin's height on screen in px
+    float thin = smoothstep(0.02, 0.3, h);
+    float margin = (1.0 - smoothstep(1.0, 2.6, (1.0 - h) * tall)) * mix(0.45, 1.0, smoothstep(5.0, 14.0, tall));
+    float vein = fbm(vec2(Pf.x / 16.0, h * 2.5 + 9.0), 3);
+    paint = vec4(mix(here.x, 0.13 - 0.05 * h, thin), mix(0.8 * here.y, 0.02 + 0.12 * vein * (1.0 - h), thin) + 0.75 * margin, 0.0, 1.0);
+  } else if (part == 3) {
+    paint = vec4(0.0, 0.95 + 0.35 * (0.5 - 0.5 * v), 0.0, 1.0); // leg: a dark stick, a little darker underneath
+  } else if (part == 5) {
+    // gill frond: the head's skin carried outward. It is painted as the skin at the place it grows from, moving
+    // steadily away from the back, so there is no break in colour where it leaves the body. Only its form is added:
+    // a little darker underneath, and a fine wine outline wherever the frond's edge is seen against something else
+    // (the paper, the body, a leg, another frond). The outline fades out at the base, where frond and head are one skin.
+    vec4 root = uGillRoot[int(lat + 0.5)];
+    float away = smoothstep(0.1, 0.35, s), outline = 0.0;
+    for (int i = 0; i < 12; i++) {
+      ivec2 o = i < 4 ? ivec2(i < 2 ? 1 : 0, i < 2 ? 0 : 1) * (i % 2 == 0 ? 1 : -1) : i < 8 ? ivec2(i < 6 ? 1 : -1, i % 2 == 0 ? 1 : -1) : ivec2(i < 10 ? 2 : 0, i < 10 ? 0 : 2) * (i % 2 == 0 ? 1 : -1);
+      ivec2 q = clamp(px + o, ivec2(0), textureSize(uWhere0, 0) - 1);
+      bool other = int(texelFetch(uWhere0, q, 0).w + 0.5) != 5 || abs(texelFetch(uWhere1, q, 0).x - lat) > 0.5;
+      if (other) outline = max(outline, i < 4 ? 1.0 : i < 8 ? 0.8 : 0.55);
+    }
+    outline *= smoothstep(0.05, 0.2, s);
+    vec2 here = skin(root.x, root.y, abs(root.y) + 0.5 * s, flowed(vec2(root.x * uLength + 90.0 * s, root.w + sign(root.w) * 70.0 * s)));
+    paint = vec4(here.x, here.y + away * (0.14 * (0.5 - 0.5 * v) + 0.05 * s) + 0.8 * outline, 0.0, 1.0);
+  } else {
+    // gill filaments under the frond: fine, light wine feathering, paler towards their tips; the colour drifts along them
+    float drift = fbm(vec2(u * 0.3 + lat * 7.0, v * 2.0 - uTime * 0.1 * uFlow), 3);
+    paint = vec4(0.04, (0.95 - 0.5 * v) * (0.65 + 0.7 * drift), 0.0, 1.0);
+  }
 }`;
 
 export const BLUR_FS = HEAD + `
@@ -105,10 +152,16 @@ void main() {
   float shimmer = uTime * 0.03 * uFlow;
   float body = dry(core.r, wide.r, p, 0.6, 0.45, 0.6, 0.15, fibre, tooth, shimmer);
   float wine = dry(core.g, wide.g, p, 0.7, 0.45, 0.5, 0.45, fibre, toothFine, shimmer * 1.3);
-  // eyes: a small shine up and to the left, and reflected light low in the bead
-  if (core.b > 0.3) for (int i = 0; i < 2; i++) {
-    vec2 rel = (p - uEye[i]) / (4.8 * uZoom);
-    if (length(rel) < 1.3) { wine *= 1.0 - 0.62 * smoothstep(0.1, 0.55, rel.y) * smoothstep(0.9, 0.55, length(rel)); wine *= mix(0.05, 1.0, smoothstep(0.2, 0.33, length(rel - vec2(-0.33, -0.4)))); }
+  // eyes: crisp dark beads laid on top of the dried paint (so no ink bleeds out around them), each with a small
+  // shine up and to the left and reflected light low in the bead
+  float bead = smoothstep(0.3, 0.62, core.b);
+  if (bead > 0.0) {
+    float eye = 3.6;
+    for (int i = 0; i < 2; i++) {
+      vec2 rel = (p - uEye[i]) / (4.8 * uZoom);
+      if (length(rel) < 1.3) { eye *= 1.0 - 0.62 * smoothstep(0.1, 0.55, rel.y) * smoothstep(0.9, 0.55, length(rel)); eye *= mix(0.05, 1.0, smoothstep(0.2, 0.33, length(rel - vec2(-0.33, -0.4)))); }
+    }
+    wine = mix(wine, eye, bead);
   }
   vec3 light = uPaper * ink(body, 0) * ink(wine, 1);
   colour = vec4(toSrgb(light) * (0.992 + 0.016 * hash(p * vec2(3.0, 7.0))), 1.0);

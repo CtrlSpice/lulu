@@ -28,5 +28,11 @@ for (const [i, leg] of a.legs.entries()) {
 // 3D sanity: the body is never thinner than 0 and the feet are below the belly
 check('cross-sections with the back below the belly', a.top.filter((t, i) => t < a.bottom[i]).length, 0);
 check('feet above the lowest point of the belly by', Math.max(0, ...a.legs.map(l => l.end[2] - Math.min(...a.bottom) - l.radius)), 0);
+// gills: three fronds a side, mirrored, growing from the back corner of the head (between its widest point and the neck)
+check('gill fronds missing (of 6)', 6 - a.gills.length, 0);
+const mirrored = a.gills.slice(0, 3).map((g, i) => { const o = a.gills[i + 3]; return Math.max(Math.abs(g.root[0] - o.root[0]) * a.L, Math.abs(g.root[3] + o.root[3]), ...g.points.map((p, k) => Math.abs(p[2] - o.points[k][2]))); });
+check('gill fronds: largest difference between the left and right of a pair', Math.max(...mirrored), 0.001);
+check('gill fronds growing from somewhere other than the back corner of the head', a.gills.filter(g => g.root[0] < 0.15 || g.root[0] > 0.2).length, 0);
+check('gill fronds whose skin does not start on the body surface', a.gills.filter(g => Math.abs(Math.abs(g.root[1]) ** 2.3 + g.root[2] ** 2.3 - 1) > 1e-6).length, 0);
 console.log(fails ? `${fails} FAILED` : 'all passed: the model seen from above is the still picture');
 process.exit(fails ? 1 : 0);
