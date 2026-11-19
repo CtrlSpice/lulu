@@ -159,7 +159,10 @@ export function buildMesh(a) {
             for (let k = 0; k <= m; k++) {
                 const t = k / m, p = gill.points[k], e = gill.across[k], d = gill.along[k], show = (edge === 1 ? gill.fringeRear : gill.fringeFront)[k];
                 const face = cross(e, d), up = face[2] >= 0 ? face : [-face[0], -face[1], -face[2]]; // the blade's upper face
-                const lean = FILAMENT_LEAN + 0.9 * t * t, dir = unit([e[0] * edge + d[0] * lean - up[0] * GILL_HANG, e[1] * edge + d[1] * lean - up[1] * GILL_HANG, e[2] * edge + d[2] * lean - up[2] * GILL_HANG]);
+                // Towards the tip the filaments turn from pointing out sideways to pointing along the frond, so the two rows
+                // close together into one point beyond the tip instead of splitting apart and leaving a notch between them.
+                const turnIn = 1 - (k / m - 0.6) / 0.4, out = k / m < 0.6 ? 1 : turnIn * turnIn * (3 - 2 * turnIn), hang = GILL_HANG * out;
+                const lean = FILAMENT_LEAN + 0.9 * t * t, dir = unit([e[0] * edge * out + d[0] * lean - up[0] * hang, e[1] * edge * out + d[1] * lean - up[1] * hang, e[2] * edge * out + d[2] * lean - up[2] * hang]);
                 // the row starts under the middle of the blade and reaches "show" px past its edge
                 const under = gill.halfThick[k] * 0.6, start = [p[0] - up[0] * under, p[1] - up[1] * under, p[2] - up[2] * under], reach = show > 0.5 ? (gill.halfWidth[k] * 1.1 + show) * Math.hypot(1, GILL_HANG) : 0, first = count();
                 push(start, t, t * filaments, 0, PART.filament, g * 2 + row);
