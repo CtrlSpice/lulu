@@ -54,7 +54,9 @@ vec2 flowed(vec2 P) {
   vec2 swirl = vec2(fbm(P / 90.0 + vec2(0.0, uTime * 0.05), 3), fbm(P / 90.0 + vec2(31.0, -uTime * 0.04), 3)) - 0.5;
   return P + uFlow * (40.0 * swirl + vec2(uTime * 3.0, 0.0));
 }
-const float GROOVES = 16.0, GROOVE_FIRST = 0.258, GROOVE_STEP = (0.502 - 0.258) / 15.0; // from just behind the front legs to just ahead of the back legs
+// Costal grooves: 13 a side (counted on living axolotls: 13.3 +/- 1.0, Scientific Reports 2024, doi 10.1038/s41598-024-62264-z),
+// from just behind the front legs to just ahead of the back legs.
+const float GROOVES = 13.0, GROOVE_FIRST = 0.258, GROOVE_STEP = (0.502 - 0.258) / 12.0;
 // her skin at a place on the body: x = pink wash, y = wine (the soft wash down the back plus the blotches).
 // s: along the body; across: -1 to 1; c: how far round from the centre line of the back (0 on it, 1 at the flank, up
 // to 2 under the belly); Pf: that place in px, after the paint's drift
@@ -63,12 +65,13 @@ vec2 skin(float s, float across, float c, vec2 Pf) {
   float mid = backStrength(s) * (1.0 - smoothstep(0.2, 1.25, c)) * 0.5 * (0.75 + 0.5 * fbm(Pf / 45.0, 3)); // the paler wash reaches down onto the sides
   float blot = smoothstep(0.42, 0.62, fbm(Pf / 26.0 + vec2(5.0, 0.0), 4));
   float dark = smoothstep(0.06, 0.13, s) * (1.0 - smoothstep(0.80, 0.95, s)) * bump(0.0, 0.36, c) * (0.4 + 1.1 * blot) * 1.25;
-  // costal grooves: the fine creases down each flank between the front and back legs, one per rib (16 on an axolotl).
-  // They belong to the body, so they do not drift with the paint. Each leans back a little as it goes down the side,
-  // and they fade out towards the centre of the back and under the belly.
+  // costal grooves: the fine creases down each flank between the front and back legs, one per rib. They belong to the
+  // body, so they do not drift with the paint. Each leans back a little as it goes down the side, and they fade out
+  // towards the centre of the back and under the belly. The grooves nearest the legs are the faintest.
   float groove = (s - 0.004 * (c - 0.9) - GROOVE_FIRST) / GROOVE_STEP;
   float crease = 1.0 - smoothstep(0.5, 1.9, abs(fract(groove + 0.5) - 0.5) * GROOVE_STEP * uLength); // 1 on a crease, fading over about 2 px
-  float grooves = crease * step(-0.5, groove) * step(groove, GROOVES - 0.5) * smoothstep(0.3, 0.6, c) * (1.0 - smoothstep(1.35, 1.75, c));
+  float fromMiddle = abs(floor(groove + 0.5) - 0.5 * (GROOVES - 1.0)) / (0.5 * (GROOVES - 1.0)); // 0 for the middle groove, 1 for the first and last
+  float grooves = crease * step(-0.5, groove) * step(groove, GROOVES - 0.5) * smoothstep(0.3, 0.6, c) * (1.0 - smoothstep(1.35, 1.75, c)) * (1.0 - 0.7 * fromMiddle * fromMiddle);
   return vec2(base, mid + dark + 0.17 * grooves);
 }
 void main() {
