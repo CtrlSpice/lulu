@@ -7,7 +7,9 @@ import { GEOMETRY_VS, GEOMETRY_FS, SCREEN_VS, PAINT_FS, BLUR_FS, PAPER_FS } from
 const WIDTH = 1000, HEIGHT = 700, CENTRE: readonly [number, number] = [500, 350];
 
 interface View { tilt: number; spin: number; zoom: number; }           // degrees, degrees, scale
-interface Settings { view: View; wiggle: number; flow: number; playing: boolean; }
+// flowSpeed: how fast the paint's clock runs compared with the tail's (1 = the same). It has no control on the page;
+// it is set from outside when recording, to show the colour flow faster without speeding up the tail.
+interface Settings { view: View; wiggle: number; flow: number; flowSpeed: number; playing: boolean; }
 interface InkTables { paperLin: number[]; body: number[]; wine: number[]; }
 interface Target { fbo: WebGLFramebuffer; textures: WebGLTexture[]; }
 
@@ -95,7 +97,7 @@ async function start(): Promise<void> {
     indexCount = mesh.indices.length;
   };
 
-  const settings: Settings = { view: { tilt: 0, spin: 0, zoom: 1 }, wiggle: 0, flow: 1, playing: true };
+  const settings: Settings = { view: { tilt: 0, spin: 0, zoom: 1 }, wiggle: 0, flow: 1, flowSpeed: 1, playing: true };
   let clock = 0, last = performance.now(), frames = 0, fpsSince = last;
 
   const uni = (p: WebGLProgram, name: string): WebGLUniformLocation | null => gl.getUniformLocation(p, name);
@@ -124,7 +126,7 @@ async function start(): Promise<void> {
     // 2. paint: how much of each ink
     gl.useProgram(paint);
     bind(0, where.textures[0], paint, 'uWhere0'); bind(1, where.textures[1], paint, 'uWhere1');
-    gl.uniform1f(uni(paint, 'uTime'), clock); gl.uniform1f(uni(paint, 'uFlow'), settings.flow); gl.uniform1f(uni(paint, 'uLength'), axolotl.L);
+    gl.uniform1f(uni(paint, 'uTime'), clock * settings.flowSpeed); gl.uniform1f(uni(paint, 'uFlow'), settings.flow); gl.uniform1f(uni(paint, 'uLength'), axolotl.L);
     gl.uniform4fv(uni(paint, 'uGillRoot'), new Float32Array(axolotl.gills.flatMap(g => [...g.root])));
     gl.uniform4fv(uni(paint, 'uGillRun'), new Float32Array(axolotl.gills.flatMap(g => [...g.run, 0])));
     screenPass(painted.fbo);
@@ -134,7 +136,7 @@ async function start(): Promise<void> {
     gl.useProgram(paper);
     bind(0, painted.textures[0], paper, 'uPaint'); bind(1, core.textures[0], paper, 'uCore'); bind(2, wide.textures[0], paper, 'uWide'); bind(3, inkTex, paper, 'uInk');
     gl.uniform3f(uni(paper, 'uPaper'), tables.paperLin[0], tables.paperLin[1], tables.paperLin[2]); gl.uniform2f(uni(paper, 'uSize'), WIDTH, HEIGHT);
-    gl.uniform1f(uni(paper, 'uTime'), clock); gl.uniform1f(uni(paper, 'uFlow'), settings.flow); gl.uniform1f(uni(paper, 'uZoom'), v.zoom);
+    gl.uniform1f(uni(paper, 'uTime'), clock * settings.flowSpeed); gl.uniform1f(uni(paper, 'uFlow'), settings.flow); gl.uniform1f(uni(paper, 'uZoom'), v.zoom);
     const eyes = axolotl.eyes.map(e => project(e, v));
     gl.uniform1f(uni(paper, 'uEyeRadius'), axolotl.eyeRadius);
     gl.uniform2fv(uni(paper, 'uEye'), new Float32Array([eyes[0][0], eyes[0][1], eyes[1][0], eyes[1][1]]));

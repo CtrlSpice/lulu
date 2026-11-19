@@ -104,7 +104,7 @@ async function start() {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.DYNAMIC_DRAW);
         indexCount = mesh.indices.length;
     };
-    const settings = { view: { tilt: 0, spin: 0, zoom: 1 }, wiggle: 0, flow: 1, playing: true };
+    const settings = { view: { tilt: 0, spin: 0, zoom: 1 }, wiggle: 0, flow: 1, flowSpeed: 1, playing: true };
     let clock = 0, last = performance.now(), frames = 0, fpsSince = last;
     const uni = (p, name) => gl.getUniformLocation(p, name);
     const bind = (unit, tex, p, name) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(uni(p, name), unit); };
@@ -149,7 +149,7 @@ async function start() {
         gl.useProgram(paint);
         bind(0, where.textures[0], paint, 'uWhere0');
         bind(1, where.textures[1], paint, 'uWhere1');
-        gl.uniform1f(uni(paint, 'uTime'), clock);
+        gl.uniform1f(uni(paint, 'uTime'), clock * settings.flowSpeed);
         gl.uniform1f(uni(paint, 'uFlow'), settings.flow);
         gl.uniform1f(uni(paint, 'uLength'), axolotl.L);
         gl.uniform4fv(uni(paint, 'uGillRoot'), new Float32Array(axolotl.gills.flatMap(g => [...g.root])));
@@ -166,7 +166,7 @@ async function start() {
         bind(3, inkTex, paper, 'uInk');
         gl.uniform3f(uni(paper, 'uPaper'), tables.paperLin[0], tables.paperLin[1], tables.paperLin[2]);
         gl.uniform2f(uni(paper, 'uSize'), WIDTH, HEIGHT);
-        gl.uniform1f(uni(paper, 'uTime'), clock);
+        gl.uniform1f(uni(paper, 'uTime'), clock * settings.flowSpeed);
         gl.uniform1f(uni(paper, 'uFlow'), settings.flow);
         gl.uniform1f(uni(paper, 'uZoom'), v.zoom);
         const eyes = axolotl.eyes.map(e => project(e, v));
