@@ -52,7 +52,7 @@ float backStrength(float s) { return 0.2 + 0.8 * smoothstep(0.03, 0.12, s) * (1.
 // the paint drifts and swirls slowly in the animal's own coordinates (px along, px across)
 vec2 flowed(vec2 P) {
   vec2 swirl = vec2(fbm(P / 90.0 + vec2(0.0, uTime * 0.05), 3), fbm(P / 90.0 + vec2(31.0, -uTime * 0.04), 3)) - 0.5;
-  return P + uFlow * (40.0 * swirl + vec2(uTime * 3.0, 0.0));
+  return P + uFlow * (40.0 * swirl - vec2(uTime * 3.0, 0.0)); // reading the pattern further towards the head as time passes carries the ink towards the tail, 3 px a second
 }
 // Costal grooves: 13 a side (counted on living axolotls: 13.3 +/- 1.0, Scientific Reports 2024, doi 10.1038/s41598-024-62264-z),
 // from just behind the front legs to just ahead of the back legs.
