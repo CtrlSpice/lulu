@@ -68,7 +68,7 @@ const float GROOVES = 13.0, GROOVE_FIRST = 0.258, GROOVE_STEP = (0.502 - 0.258) 
 // to 2 under the belly); Pf: that place in px, after the paint's drift
 vec2 skin(float s, float across, float c, vec2 Pf) {
   float base = 0.22 + 0.07 * across * across + 0.06 * bump(0.25, 0.2, s);
-  float mid = backStrength(s) * (1.0 - smoothstep(0.2, 1.25, c)) * 0.5 * (0.75 + 0.5 * fbm(Pf / 45.0, 3)); // the paler wash reaches down onto the sides
+  float mid = backStrength(s) * (1.0 - smoothstep(0.45, 1.15, c)) * 0.5 * (0.75 + 0.5 * fbm(Pf / 45.0, 3)); // the band of mid-tone markings: wide across the back, then an ombre fade down each side, gone by the widest point so the lower half stays pink
   float blot = smoothstep(0.42, 0.62, fbm(Pf / 26.0 + vec2(5.0, 0.0), 4));
   float dark = smoothstep(0.06, 0.13, s) * (1.0 - smoothstep(0.80, 0.95, s)) * bump(0.0, 0.36, c) * (0.4 + 1.1 * blot) * 1.25;
   // costal grooves: the fine creases down each flank between the front and back legs, one per rib. They belong to the
