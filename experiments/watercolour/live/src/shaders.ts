@@ -110,7 +110,7 @@ void main() {
     // the gill under the frond: a wine ground, the filaments drawn on it as fine light lines, and a light band around
     // its outer edge; the wine drifts along it
     float drift = fbm(vec2(u * 0.3 + lat * 7.0, v * 2.0 - uTime * 0.1 * uFlow), 3);
-    float line = 0.85 * (1.0 - smoothstep(0.08, 0.3, abs(fract(u) - 0.5) * 2.0)), band = smoothstep(0.8, 0.88, v);
+    float line = 0.85 * (1.0 - smoothstep(0.08, 0.3, abs(fract(u) - 0.5) * 2.0)), band = smoothstep(0.9, 0.95, v);
     float light = max(line, band);
     paint = vec4(mix(0.06, 0.14, light), mix(1.15 * (0.8 + 0.4 * drift), 0.02, light), 0.0, 1.0);
   }
