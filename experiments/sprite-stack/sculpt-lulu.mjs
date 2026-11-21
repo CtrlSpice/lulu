@@ -32,6 +32,9 @@ for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx
     if (23.5 - half - a >= 2) { section(r, a, Math.ceil(23.5 - half) + 1, -1.5, 1, 3.5, 'arm'); section(r, Math.floor(23.5 + half) - 1, b, -1.5, 1, 3.5, 'arm'); }
   } else for (const [a, b] of fx) section(r, a, b, -5.5, 0.5, 6.5, 'leg');
 }
+// snout: a broad rounded muzzle on the lower front of the head, carrying the mouth
+const SN = (process.argv[5] || '23.5,11,22.5,11,6.5,4.2').split(',').map(Number);
+for (let x = 0; x < N; x++) for (let y = 0; y <= 23; y++) for (let r = 9; r <= 28; r++) if (((x - SN[0]) / SN[3]) ** 2 + ((y - SN[1]) / SN[4]) ** 2 + ((r - SN[2]) / SN[5]) ** 2 <= 1) vox.set(key(x, y, r), { part: 'head' });
 // tail: straight out of the lower back, tapering, lifting slightly
 for (let y = -6; y >= -21; y--) { const t = (-6 - y) / 15, cr = 39.5 - 2.5 * t, hw = 3.4 * (1 - t) + 1, hh = 4.2 * (1 - t) + 1.2;
   for (let x = 16; x <= 31; x++) for (let r = 28; r <= 46; r++) if (((x - 23.5) / hw) ** 2 + ((r - cr) / hh) ** 2 <= 1 && !vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'tail' }); }
