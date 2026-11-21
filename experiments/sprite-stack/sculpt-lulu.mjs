@@ -20,8 +20,11 @@ const section = (r, x0, x1, yb, yc, yf, part, P = 2.3) => { const cx = (x0 + x1)
 const bump = (r, mid, w) => Math.exp(-(((r - mid) / w) ** 2));
 for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx.length) continue;
   if (r <= 28) { // head: near-round dome, a little deeper at the back, soft muzzle low on the front
-    const t = (r - 18.5) / 10.2, dome = Math.sqrt(Math.max(0, 1 - t * t)) ** 0.75;
-    section(r, fx[0][0], fx[fx.length - 1][1], 1 - 11.5 * dome, 1, 1 + 11 * dome + 2.5 * bump(r, 21.5, 3.2), 'head');
+    // side profile: the front is fullest low down (rounded snout at eye-to-mouth height), the chin tucks back a little, the back is a plain round
+    const se = (d, span, p) => Math.max(0, 1 - Math.abs(d / span) ** p) ** (1 / p);
+    const yf = 1 + 13 * (r <= 21 ? se(21 - r, 12.6, 2.2) : se(r - 21, 9, 2.4));
+    const yb = 1 - 11.5 * (r <= 17 ? se(17 - r, 8.6, 2) : se(r - 17, 12.2, 2));
+    section(r, fx[0][0], fx[fx.length - 1][1], yb, 2, yf, 'head', 2.2);
   } else if (r <= 42) { // trunk and arms
     const [a, b] = [fx[0][0], fx[fx.length - 1][1]], t = (r - 29) / 13, half = Math.min((b - a + 1) / 2, 10 + 3 * Math.sin(Math.PI * Math.min(1, t * 1.15) / 2));
     const d = 6 + 2.6 * Math.sin(Math.PI * Math.min(1, t + 0.15));
