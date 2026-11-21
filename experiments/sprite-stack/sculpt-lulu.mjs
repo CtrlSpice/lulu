@@ -18,6 +18,7 @@ const section = (r, x0, x1, yb, yc, yf, part, P = 2.3) => { const cx = (x0 + x1)
   for (let x = x0; x <= x1; x++) for (let y = Math.floor(yb); y <= Math.ceil(yf); y++) { const ry = y >= yc ? yf - yc + 0.5 : yc - yb + 0.5;
     if (Math.abs((x - cx) / rx) ** P + Math.abs((y - yc) / ry) ** P <= 1) vox.set(key(x, y, r), { part }); } };
 const bump = (r, mid, w) => Math.exp(-(((r - mid) / w) ** 2));
+const armRows = [];
 for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx.length) continue;
   if (r <= 28) { // head: near-round dome, a little deeper at the back, soft muzzle low on the front
     // side profile: the front is fullest low down (rounded snout at eye-to-mouth height), the chin tucks back a little, the back is a plain round
@@ -26,16 +27,20 @@ for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx
     const yb = 1 - 11.5 * (r <= 17 ? se(17 - r, 8.6, 2) : se(r - 17, 12.2, 2));
     section(r, fx[0][0], fx[fx.length - 1][1], yb, 2, yf, 'head', 2.2);
   } else if (r <= 42) { // trunk: as deep as it is chonky right from where the head sits on it, so there is no neck
-    const [a, b] = [fx[0][0], fx[fx.length - 1][1]], t = (r - 29) / 13, half = Math.min((b - a + 1) / 2, 13);
-    const d = 9 + 1.6 * Math.sin(Math.PI * Math.min(1, t + 0.2));
-    section(r, Math.ceil(23.5 - half), Math.floor(23.5 + half), 0.5 - d, 0.5, 1 + d + 1.2 * bump(r, 38, 4), 'body');
-    // arms: the part of the outline beyond the trunk, growing out of the trunk's side and thinning toward the hand
-    if ((b - a + 1) / 2 > 13.5) for (const s of [-1, 1]) { const tip = s < 0 ? a : b;
-      for (let x = Math.round(23.5 + s * 8); s < 0 ? x >= tip : x <= tip; x += s) { const k = Math.min(1, Math.max(0, (Math.abs(x - 23.5) - 8) / (Math.abs(tip - 23.5) - 8))), hd = 4.6 - 2.2 * k;
-        for (let y = Math.ceil(1.5 - hd); y <= Math.floor(1.5 + hd); y++) if (!vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'body' }); } }
-  } else for (const [a, b] of fx) section(r, a, b, -5.5, 0.5, 6.5, 'leg');
+    const [a, b] = [fx[0][0], fx[fx.length - 1][1]], t = (r - 29) / 13, half = Math.min((b - a + 1) / 2, 8 + 5 * Math.min(1, (r - 29) / 9) ** 0.8);   // the torso alone: the arms are separate limbs
+    // back: continues the back of the head and eases out, with no hump. front: a full belly, fullest at row 38
+    const sm = Math.min(1, (r - 29) / 9), db = 6 + 3.2 * sm * sm * (3 - 2 * sm), df = 8.5 + 4.8 * bump(r, 38, 5.5);
+    section(r, Math.ceil(23.5 - half), Math.floor(23.5 + half), 0.5 - db, 1, 1 + df, 'body');
+    armRows.push([r, a, b]);
+  } else for (const [a, b] of fx) section(r, a, b, -6, 1, 8, 'body');
 }
 // snout: a broad rounded muzzle on the lower front of the head, carrying the mouth
+// arms: short tapered limbs from the shoulder, where head meets body, out and down to the hand, held a little forward of the body's side
+const hand = armRows.filter(([r]) => r >= 34 && r <= 37), tipX = Math.min(...hand.map(([, a]) => a)), tipR = (hand[0][0] + hand[hand.length - 1][0]) / 2;
+for (const s of [-1, 1]) { const A = [23.5 + s * 7.5, 2.5, 31], B = [23.5 + s * (23.5 - tipX - 3), 4.5, tipR + 0.5];
+  for (let x = 0; x < N; x++) for (let y = -6; y <= 12; y++) for (let r = 28; r <= 40; r++) { const d = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], w = [x - A[0], y - A[1], r - A[2]];
+    const k = Math.min(1, Math.max(0, (w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / (d[0] ** 2 + d[1] ** 2 + d[2] ** 2))), rad = 3.7 - 0.7 * k;
+    if (Math.hypot(w[0] - k * d[0], w[1] - k * d[1], w[2] - k * d[2]) <= rad && !vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'arm' }); } }
 // two overlapping rounds: a bridge that carries the forehead slope forward, and the snout tip
 const SNOUT = (process.argv[5] || '23.5,11,22.5,11,6.5,4.2').split(';').map(s => s.split(',').map(Number));
 for (const SN of SNOUT) for (let x = 0; x < N; x++) for (let y = 0; y <= 23; y++) for (let r = 9; r <= 28; r++) if (((x - SN[0]) / SN[3]) ** 2 + ((y - SN[1]) / SN[4]) ** 2 + ((r - SN[2]) / SN[5]) ** 2 <= 1) vox.set(key(x, y, r), { part: 'head' });
@@ -48,7 +53,7 @@ for (let r = 0; r < N; r++) for (let x = 0; x < N; x++) { const c = at(FR.g, x, 
   for (let y = yc - 1; y <= yc + 1; y++) if (!vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'gill', c: c === 'p' ? 'g' : c === 'D' ? 'G' : c }); }
 // marks: eyes, mouth, freckles, dimples from the front drawing; freckles from the back drawing
 const EYEUP = +(process.argv[6] || 2);
-const frontMark = (x, r, depth) => { const e = at(FR.g, x, r + EYEUP); if (e === 'e' || e === 'w') return depth <= 2 ? e : null; const c = at(FR.g, x, r); if (c === 'e' || c === 'w') return null; if (c === 'o' && r >= 21 && r <= 26 && !edge(FR.g, x, r)) return 'o';
+const frontMark = (x, r, depth) => { const e = at(FR.g, x, r + EYEUP); if (e === 'e' || e === 'w') return depth <= 2 ? e : null; const c = at(FR.g, x, r); if (c === 'e' || c === 'w') return null; if (c === 'o' && r >= 21 && r <= 26 && !edge(FR.g, x, r)) return depth <= 2 ? 'o' : null;
   return null; };
 const backMark = () => null;   // freckles and dimples are left off until the shape is right
 for (const [k, v] of vox) { if (v.part === 'gill') continue; const r = k % 64, y = Math.floor(k / 64) % 64 - 24, x = Math.floor(k / 4096); v.c = 'b';
@@ -71,7 +76,7 @@ const frame = th => { const g = Array.from({ length: CH }, () => Array(CW).fill(
         g[sy][sx] = lit(q, cs, sn); D[sy][sx] = v; PT[sy][sx] = q.part; break; } } }
   const o = g.map(row => row.slice());
   for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { if (g[y][x] === '.') { if (n4.some(([a, b]) => g[y + b] && g[y + b][x + a] && g[y + b][x + a] !== '.')) o[y][x] = 'o'; }
-    else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + ((PT[y][x] === 'body' && PT[y + b][x + a] === 'arm') ? 3.5 : 1.5))) o[y][x] = 'o'; }
+    else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + 1.5)) o[y][x] = 'o'; }
   return o.map(row => row.join('')); };
 const n = +nAngles, frames = Array.from({ length: n }, (_, i) => frame(i * 2 * Math.PI / n));
 fs.writeFileSync(outTxt, FR.pal.join('\n') + '\n' + Array.from({ length: CH }, (_, y) => frames.map(f => f[y]).join('')).join('\n') + '\n');
