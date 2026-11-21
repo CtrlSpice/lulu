@@ -33,8 +33,9 @@ for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx
   } else for (const [a, b] of fx) section(r, a, b, -5.5, 0.5, 6.5, 'leg');
 }
 // snout: a broad rounded muzzle on the lower front of the head, carrying the mouth
-const SN = (process.argv[5] || '23.5,11,22.5,11,6.5,4.2').split(',').map(Number);
-for (let x = 0; x < N; x++) for (let y = 0; y <= 23; y++) for (let r = 9; r <= 28; r++) if (((x - SN[0]) / SN[3]) ** 2 + ((y - SN[1]) / SN[4]) ** 2 + ((r - SN[2]) / SN[5]) ** 2 <= 1) vox.set(key(x, y, r), { part: 'head' });
+// two overlapping rounds: a bridge that carries the forehead slope forward, and the snout tip
+const SNOUT = (process.argv[5] || '23.5,9,19.5,12,7,5.5;23.5,12.5,21.5,9.5,7.5,4.3').split(';').map(s => s.split(',').map(Number));
+for (const SN of SNOUT) for (let x = 0; x < N; x++) for (let y = 0; y <= 23; y++) for (let r = 9; r <= 28; r++) if (((x - SN[0]) / SN[3]) ** 2 + ((y - SN[1]) / SN[4]) ** 2 + ((r - SN[2]) / SN[5]) ** 2 <= 1) vox.set(key(x, y, r), { part: 'head' });
 // tail: straight out of the lower back, tapering, lifting slightly
 for (let y = -6; y >= -21; y--) { const t = (-6 - y) / 15, cr = 39.5 - 2.5 * t, hw = 3.4 * (1 - t) + 1, hh = 4.2 * (1 - t) + 1.2;
   for (let x = 16; x <= 31; x++) for (let r = 28; r <= 46; r++) if (((x - 23.5) / hw) ** 2 + ((r - cr) / hh) ** 2 <= 1 && !vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'tail' }); }
