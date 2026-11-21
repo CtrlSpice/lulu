@@ -60,9 +60,9 @@ const EYEOUT = +(process.argv[7] || 4);   // each eye is moved this many px outw
 const EO = EYEOUT - HEADIN;   // the eyes move in with the head, keeping their distance from its edge
 const eyeAt = (x, r) => { const e = at(FR.g, x < 23.5 ? x + EO : x - EO, r + EYEUP); return (e === 'e' || e === 'w') && (x < 23.5) === ((x < 23.5 ? x + EO : x - EO) < 23.5) ? e : null; };
 const frontMark = (x, r, depth) => { const c = at(FR.g, x, r); if (c === 'e' || c === 'w') return null; if (c === 'o' && r >= 21 && r <= 26 && !edge(FR.g, x, r)) return depth <= 2 ? 'o' : null;
-  if (c === 's' && depth <= 2 && (r <= 13 || ((r === 22 || r === 23) && (x < 16 || x > 31)))) return 's';   // freckles and dimples
+  if (c === 's' && depth <= 2 && (r === 22 || r === 23) && (x < 16 || x > 31)) return 's';   // dimples. Freckles stay off until the rest is right
   return null; };
-const backMark = (x, r) => (at(BK.g, x, r) === 's' && r <= 16 && x > 13 && x < 34) ? 's' : null;   // freckles on the back of the head
+const backMark = () => null;   // freckles stay off until the rest is right
 for (const [k, v] of vox) { if (v.part === 'gill') continue; const r = k % 64, y = Math.floor(k / 64) % 64 - 24, x = Math.floor(k / 4096); v.c = 'b';
   if (v.part !== 'head') continue; const near = s => [1, 2, 3, 4, 5].some(d => !has(x, y + s * d, r));
   const depth = [1, 2, 3, 4, 5].find(d => !has(x, y + d, r)); if (y > 1 && depth) v.c = frontMark(x, r, depth) || 'b';
