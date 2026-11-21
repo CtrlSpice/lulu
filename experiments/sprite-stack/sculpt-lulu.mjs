@@ -25,16 +25,19 @@ for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx
     const yf = 1 + 13 * (r <= 21 ? se(21 - r, 12.6, 2.2) : se(r - 21, 9, 2.4));
     const yb = 1 - 11.5 * (r <= 17 ? se(17 - r, 8.6, 2) : se(r - 17, 12.2, 2));
     section(r, fx[0][0], fx[fx.length - 1][1], yb, 2, yf, 'head', 2.2);
-  } else if (r <= 42) { // trunk and arms
-    const [a, b] = [fx[0][0], fx[fx.length - 1][1]], t = (r - 29) / 13, half = Math.min((b - a + 1) / 2, 10 + 3 * Math.sin(Math.PI * Math.min(1, t * 1.15) / 2));
-    const d = 6 + 2.6 * Math.sin(Math.PI * Math.min(1, t + 0.15));
+  } else if (r <= 42) { // trunk: as deep as it is chonky right from where the head sits on it, so there is no neck
+    const [a, b] = [fx[0][0], fx[fx.length - 1][1]], t = (r - 29) / 13, half = Math.min((b - a + 1) / 2, 13);
+    const d = 9 + 1.6 * Math.sin(Math.PI * Math.min(1, t + 0.2));
     section(r, Math.ceil(23.5 - half), Math.floor(23.5 + half), 0.5 - d, 0.5, 1 + d + 1.2 * bump(r, 38, 4), 'body');
-    if (23.5 - half - a >= 2) { section(r, a, Math.ceil(23.5 - half) + 1, -1.5, 1, 3.5, 'arm'); section(r, Math.floor(23.5 + half) - 1, b, -1.5, 1, 3.5, 'arm'); }
+    // arms: the part of the outline beyond the trunk, growing out of the trunk's side and thinning toward the hand
+    if ((b - a + 1) / 2 > 13.5) for (const s of [-1, 1]) { const tip = s < 0 ? a : b;
+      for (let x = Math.round(23.5 + s * 8); s < 0 ? x >= tip : x <= tip; x += s) { const k = Math.min(1, Math.max(0, (Math.abs(x - 23.5) - 8) / (Math.abs(tip - 23.5) - 8))), hd = 4.6 - 2.2 * k;
+        for (let y = Math.ceil(1.5 - hd); y <= Math.floor(1.5 + hd); y++) if (!vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'body' }); } }
   } else for (const [a, b] of fx) section(r, a, b, -5.5, 0.5, 6.5, 'leg');
 }
 // snout: a broad rounded muzzle on the lower front of the head, carrying the mouth
 // two overlapping rounds: a bridge that carries the forehead slope forward, and the snout tip
-const SNOUT = (process.argv[5] || '23.5,9,19.5,12,7,5.5;23.5,12.5,21.5,9.5,7.5,4.3').split(';').map(s => s.split(',').map(Number));
+const SNOUT = (process.argv[5] || '23.5,9,19.5,12,7,5.5;23.5,11.5,21.5,10,6.8,4.3').split(';').map(s => s.split(',').map(Number));
 for (const SN of SNOUT) for (let x = 0; x < N; x++) for (let y = 0; y <= 23; y++) for (let r = 9; r <= 28; r++) if (((x - SN[0]) / SN[3]) ** 2 + ((y - SN[1]) / SN[4]) ** 2 + ((r - SN[2]) / SN[5]) ** 2 <= 1) vox.set(key(x, y, r), { part: 'head' });
 // tail: straight out of the lower back, tapering, lifting slightly
 for (let y = -6; y >= -21; y--) { const t = (-6 - y) / 15, cr = 39.5 - 2.5 * t, hw = 3.4 * (1 - t) + 1, hh = 4.2 * (1 - t) + 1.2;
@@ -67,7 +70,7 @@ const frame = th => { const g = Array.from({ length: CH }, () => Array(CW).fill(
         g[sy][sx] = lit(q, cs, sn); D[sy][sx] = v; PT[sy][sx] = q.part; break; } } }
   const o = g.map(row => row.slice());
   for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { if (g[y][x] === '.') { if (n4.some(([a, b]) => g[y + b] && g[y + b][x + a] && g[y + b][x + a] !== '.')) o[y][x] = 'o'; }
-    else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + 1.5)) o[y][x] = 'o'; }
+    else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + ((PT[y][x] === 'body' && PT[y + b][x + a] === 'arm') ? 3.5 : 1.5))) o[y][x] = 'o'; }
   return o.map(row => row.join('')); };
 const n = +nAngles, frames = Array.from({ length: n }, (_, i) => frame(i * 2 * Math.PI / n));
 fs.writeFileSync(outTxt, FR.pal.join('\n') + '\n' + Array.from({ length: CH }, (_, y) => frames.map(f => f[y]).join('')).join('\n') + '\n');
