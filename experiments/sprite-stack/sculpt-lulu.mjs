@@ -45,10 +45,10 @@ for (const s of [-1, 1]) { const A = [23.5 + s * 7.5, 3, 31], B = [23.5 + s * (2
 // two overlapping rounds: a bridge that carries the forehead slope forward, and the snout tip
 const SNOUT = (process.argv[5] || '23.5,11,22.5,11,6.5,4.2').split(';').map(s => s.split(',').map(Number));
 for (const SN of SNOUT) for (let x = 0; x < N; x++) for (let y = 0; y <= 23; y++) for (let r = 9; r <= 28; r++) if (((x - SN[0]) / SN[3]) ** 2 + ((y - SN[1]) / SN[4]) ** 2 + ((r - SN[2]) / SN[5]) ** 2 <= 1) vox.set(key(x, y, r), { part: 'head' });
-// tail: the tapered cone straight out of the lower back, ending in a point. Its underside is a straight line that rises
-// toward the tip and stays above row 42, so it never dips under the base or shows between the legs.
-for (let y = -6; y >= -21; y--) { const t = (-6 - y) / 15, hw = 3.4 * (1 - t) + 1, hh = 4.2 * (1 - t) + 1.2, cr = 41.5 - 2.5 * t - hh;
-  for (let x = 16; x <= 31; x++) for (let r = 28; r <= 42; r++) if (((x - 23.5) / hw) ** 2 + ((r - cr) / hh) ** 2 <= 1 && !vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'tail' }); }
+// tail: the rounded tail the user chose, straight out of the lower back, with a round tip.
+// The base is 1 px wider on each side than the tail was first drawn; the extra width is full where the tail leaves the body and fades out three quarters of the way along.
+for (let y = -3; y >= -22; y--) { const t = (-3 - y) / 19, e = Math.sqrt(1 - Math.max(0, (t - 0.8) / 0.2) ** 2), cr = 38.4 - 1.2 * t, hw = (3.4 - 2 * t) * e + 0.3 + Math.min(1, Math.max(0, 1 - (t - 0.3) / 0.45)) ** 2, hh = (3.9 - 2.2 * t) * e + 0.3;
+  for (let x = 16; x <= 31; x++) for (let r = 30; r <= 42; r++) if (((x - 23.5) / hw) ** 2 + ((r - cr) / hh) ** 2 <= 1 && !vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'tail' }); }
 // gills: petals from the front drawing, leaning back as they go outward
 for (let r = 0; r < N; r++) for (let sx0 = 0; sx0 < N; sx0++) { const c = at(FR.g, sx0, r); if (!GILL.includes(c)) continue; const x = sx0 < 23.5 ? sx0 + HEADIN : sx0 - HEADIN;   // the gills move in with the head
   // each petal sweeps backward the further it gets from where the gills join the head, so from the side they fan up-back, back and down-back
@@ -84,7 +84,7 @@ const frame = th => { const g = Array.from({ length: CH }, () => Array(CW).fill(
         g[sy][sx] = lit(q, cs, sn); D[sy][sx] = v; PT[sy][sx] = q.part; break; } } }
   const o = g.map(row => row.slice());
   for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { if (g[y][x] === '.') { if (n4.some(([a, b]) => g[y + b] && g[y + b][x + a] && g[y + b][x + a] !== '.')) o[y][x] = 'o'; }
-    else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + ((PT[y][x] === 'body' && PT[y + b][x + a] === 'head') ? 2.5 : (PT[y][x] === 'body' && PT[y + b][x + a] === 'tail') ? -0.6 : 1.5))) o[y][x] = 'o'; }
+    else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + ((PT[y][x] === 'body' && PT[y + b][x + a] === 'head') ? 2.5 : 1.5))) o[y][x] = 'o'; }
   return o.map(row => row.join('')); };
 const n = +nAngles, frames = Array.from({ length: n }, (_, i) => frame(i * 2 * Math.PI / n));
 fs.writeFileSync(outTxt, FR.pal.join('\n') + '\n' + Array.from({ length: CH }, (_, y) => frames.map(f => f[y]).join('')).join('\n') + '\n');
