@@ -56,18 +56,17 @@ for (let r = 0; r < N; r++) for (let sx0 = 0; sx0 < N; sx0++) { const c = at(FR.
   for (let y = yc - 1; y <= yc + 1; y++) if (!vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'gill', c: c === 'p' ? 'g' : c === 'D' ? 'G' : c }); }
 // marks: eyes, mouth, freckles, dimples from the front drawing; freckles from the back drawing
 const EYEUP = +(process.argv[6] || 2);
-const EYEOUT = +(process.argv[7] || 4);   // each eye is moved this many px outward from where the front drawing has it
+const EYEOUT = +(process.argv[7] || 2);   // with the head narrowed 2 px per side, 2 puts each eye exactly where the front drawing has it
 const EO = EYEOUT - HEADIN;   // the eyes move in with the head, keeping their distance from its edge
 const eyeAt = (x, r) => { const e = at(FR.g, x < 23.5 ? x + EO : x - EO, r + EYEUP); return (e === 'e' || e === 'w') && (x < 23.5) === ((x < 23.5 ? x + EO : x - EO) < 23.5) ? e : null; };
 const frontMark = (x, r, depth) => { const c = at(FR.g, x, r); if (c === 'e' || c === 'w') return null; if (c === 'o' && r >= 21 && r <= 26 && !edge(FR.g, x, r)) return depth <= 2 ? 'o' : null;
-  if (c === 's' && depth <= 2 && (r === 22 || r === 23) && (x < 16 || x > 31)) return 's';   // dimples. Freckles stay off until the rest is right
   return null; };
-const backMark = () => null;   // freckles stay off until the rest is right
+const backMark = () => null;   // freckles and dimples are left off until the shape is right
 for (const [k, v] of vox) { if (v.part === 'gill') continue; const r = k % 64, y = Math.floor(k / 64) % 64 - 24, x = Math.floor(k / 4096); v.c = 'b';
   if (v.part !== 'head') continue; const near = s => [1, 2, 3, 4, 5].some(d => !has(x, y + s * d, r));
   const depth = [1, 2, 3, 4, 5].find(d => !has(x, y + d, r)); if (y > 1 && depth) v.c = frontMark(x, r, depth) || 'b';
   // eyes wrap round the corner of the head: any voxel within 2 of the surface, forward or sideways
-  if (y < 1 && near(-1)) v.c = backMark(47 - x, r) || v.c; }
+  const e = y > 1 && eyeAt(x, r); if (e && ([1, 2].some(d => !has(x, y + d, r)) || [1, 2, 3, 4].some(d => !has(x + (x < 23.5 ? -d : d), y, r)))) v.c = e; else if (y < 1 && near(-1)) v.c = backMark(47 - x, r) || 'b'; }
 // normals from the shape, so the light stays put while she turns
 for (const [k, v] of vox) { const r = k % 64, y = Math.floor(k / 64) % 64 - 24, x = Math.floor(k / 4096); const n = [0, 0, 0];
   for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) for (let c = -3; c <= 3; c++) if (!has(x + a, y + b, r + c)) { n[0] += a; n[1] += b; n[2] -= c; }
@@ -80,21 +79,12 @@ const CW = 64, CH = 56, cx = 31.5, base = 50;
 // how much nearer a neighbouring part must be before a line is drawn on the farther one. A leg shares no line with the body or the tail; the two legs share one with each other.
 const isLeg = p => p === 'legL' || p === 'legR';
 const gapFor = (far, near) => (isLeg(far) && isLeg(near)) ? 1.5 : (isLeg(far) || isLeg(near)) ? 99 : (far === 'body' && near === 'head') ? 2.5 : 1.5;
-const EYE = { dx: +(process.argv[11] || 5.5), y: +(process.argv[12] || 7), top: 14, hide: 0.05 };
 const frame = th => { const g = Array.from({ length: CH }, () => Array(CW).fill('.')), D = Array.from({ length: CH }, () => Array(CW).fill(-99)), PT = Array.from({ length: CH }, () => Array(CW).fill(''));
   const cs = Math.cos(th), sn = Math.sin(th);
   for (let r = 0; r < N; r++) { const sy = base - (45 - r);
     for (let sx = 0; sx < CW; sx++) { const u = sx - cx;
       for (let v = 34; v >= -34; v -= 0.5) { const x = Math.round(23.5 + u * cs + v * sn), y = Math.round(-u * sn + v * cs); const q = (x >= 0 && x < N && y >= -24 && y <= 23) && vox.get(key(x, y, r)); if (!q) continue;
         g[sy][sx] = lit(q, cs, sn); D[sy][sx] = v; PT[sy][sx] = q.part; break; } } }
-  // eyes: placed per angle. Each eye has one anchor point; from the front it lands where the front drawing has the eye,
-  // from the side it lands on the side of the head. The eye is 3 px wide facing the camera, 2 px wide when turned away, hidden from behind.
-  for (const s of [-1, 1]) { const dx = s * EYE.dx, u = dx * cs - EYE.y * sn, v = dx * sn + EYE.y * cs, f = v / Math.hypot(EYE.dx, EYE.y);
-    if (f <= EYE.hide || cs < -0.2) continue; const w = f > 0.5 ? 3 : 2, c0 = Math.round(cx + u), cols = w === 3 ? [c0 - 1, c0, c0 + 1] : (u < 0 ? [c0, c0 + 1] : [c0 - 1, c0]);
-    const cells = []; for (let i = 0; i < 5; i++) for (const x of cols) cells.push([x, EYE.top + 5 + i]);
-    if (cells.filter(([x, y]) => PT[y] && PT[y][x] === 'head').length < cells.length * 0.8) continue;
-    for (const [x, y] of cells) if (PT[y][x] === 'head') g[y][x] = 'e';
-    if (PT[EYE.top + 5][cols[0]] === 'head') g[EYE.top + 5][cols[0]] = 'w'; }
   const o = g.map(row => row.slice());
   for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { if (g[y][x] === '.') { if (n4.some(([a, b]) => g[y + b] && g[y + b][x + a] && g[y + b][x + a] !== '.')) o[y][x] = 'o'; }
     else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + gapFor(PT[y][x], PT[y + b][x + a]))) o[y][x] = 'o'; }
