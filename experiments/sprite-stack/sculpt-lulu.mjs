@@ -17,6 +17,7 @@ const has = (x, y, r) => y >= -24 && y <= 23 && x >= 0 && x < N && vox.has(key(x
 const section = (r, x0, x1, yb, yc, yf, part, P = 2.3) => { const cx = (x0 + x1) / 2, rx = (x1 - x0 + 1) / 2;
   for (let x = x0; x <= x1; x++) for (let y = Math.floor(yb); y <= Math.ceil(yf); y++) { const ry = y >= yc ? yf - yc + 0.5 : yc - yb + 0.5;
     if (Math.abs((x - cx) / rx) ** P + Math.abs((y - yc) / ry) ** P <= 1) vox.set(key(x, y, r), { part }); } };
+const HEADIN = +(process.argv[8] || 2);   // the head is narrowed by this many px on each side; the mouth keeps its full width
 const bump = (r, mid, w) => Math.exp(-(((r - mid) / w) ** 2));
 const armRows = [];
 for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx.length) continue;
@@ -25,7 +26,7 @@ for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx
     const se = (d, span, p) => Math.max(0, 1 - Math.abs(d / span) ** p) ** (1 / p);
     const yf = 1 + 13 * (r <= 21 ? se(21 - r, 12.6, 2.2) : se(r - 21, 9, 2.4));
     const yb = 1 - 11.5 * (r <= 17 ? se(17 - r, 8.6, 2) : se(r - 17, 12.2, 2));
-    section(r, fx[0][0], fx[fx.length - 1][1], yb, 2, yf, 'head', 2.2);
+    section(r, fx[0][0] + HEADIN, fx[fx.length - 1][1] - HEADIN, yb, 2, yf, 'head', 2.2);
   } else if (r <= 42) { // trunk: as deep as it is chonky right from where the head sits on it, so there is no neck
     const [a, b] = [fx[0][0], fx[fx.length - 1][1]], t = (r - 29) / 13, half = Math.min((b - a + 1) / 2, 8 + 5 * Math.min(1, (r - 29) / 9) ** 0.8);   // the torso alone: the arms are separate limbs
     // back: continues the back of the head and eases out, with no hump. front: a full belly, fullest at row 38
@@ -49,14 +50,15 @@ for (const SN of SNOUT) for (let x = 0; x < N; x++) for (let y = 0; y <= 23; y++
 for (let y = -6; y >= -21; y--) { const t = (-6 - y) / 15, hw = 3.4 * (1 - t) + 1, hh = 4.2 * (1 - t) + 1.2, cr = 41.5 - 2.5 * t - hh;
   for (let x = 16; x <= 31; x++) for (let r = 28; r <= 42; r++) if (((x - 23.5) / hw) ** 2 + ((r - cr) / hh) ** 2 <= 1 && !vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'tail' }); }
 // gills: petals from the front drawing, leaning back as they go outward
-for (let r = 0; r < N; r++) for (let x = 0; x < N; x++) { const c = at(FR.g, x, r); if (!GILL.includes(c)) continue;
+for (let r = 0; r < N; r++) for (let sx0 = 0; sx0 < N; sx0++) { const c = at(FR.g, sx0, r); if (!GILL.includes(c)) continue; const x = sx0 < 23.5 ? sx0 + HEADIN : sx0 - HEADIN;   // the gills move in with the head
   // each petal sweeps backward the further it gets from where the gills join the head, so from the side they fan up-back, back and down-back
-  const dist = Math.hypot(Math.max(0, Math.abs(x - 23.5) - 13.5), r - 17), yc = Math.round(-1 - 0.8 * dist);
+  const dist = Math.hypot(Math.max(0, Math.abs(x - 23.5) - 13.5 + HEADIN), r - 17), yc = Math.round(-1 - 0.8 * dist);
   for (let y = yc - 1; y <= yc + 1; y++) if (!vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'gill', c: c === 'p' ? 'g' : c === 'D' ? 'G' : c }); }
 // marks: eyes, mouth, freckles, dimples from the front drawing; freckles from the back drawing
 const EYEUP = +(process.argv[6] || 2);
 const EYEOUT = +(process.argv[7] || 4);   // each eye is moved this many px outward from where the front drawing has it
-const eyeAt = (x, r) => { const e = at(FR.g, x < 23.5 ? x + EYEOUT : x - EYEOUT, r + EYEUP); return (e === 'e' || e === 'w') && (x < 23.5) === ((x < 23.5 ? x + EYEOUT : x - EYEOUT) < 23.5) ? e : null; };
+const EO = EYEOUT - HEADIN;   // the eyes move in with the head, keeping their distance from its edge
+const eyeAt = (x, r) => { const e = at(FR.g, x < 23.5 ? x + EO : x - EO, r + EYEUP); return (e === 'e' || e === 'w') && (x < 23.5) === ((x < 23.5 ? x + EO : x - EO) < 23.5) ? e : null; };
 const frontMark = (x, r, depth) => { const c = at(FR.g, x, r); if (c === 'e' || c === 'w') return null; if (c === 'o' && r >= 21 && r <= 26 && !edge(FR.g, x, r)) return depth <= 2 ? 'o' : null;
   return null; };
 const backMark = () => null;   // freckles and dimples are left off until the shape is right
