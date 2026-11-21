@@ -67,6 +67,15 @@ for (const [k, v] of vox) { if (v.part === 'gill') continue; const r = k % 64, y
   const depth = [1, 2, 3, 4, 5].find(d => !has(x, y + d, r)); if (y > 1 && depth) v.c = frontMark(x, r, depth) || 'b';
   // eyes wrap round the corner of the head: any voxel within 2 of the surface, forward or sideways
   const e = y > 1 && eyeAt(x, r); if (e && ([1, 2].some(d => !has(x, y + d, r)) || [1, 2, 3, 4].some(d => !has(x + (x < 23.5 ? -d : d), y, r)))) v.c = e; else if (y < 1 && near(-1)) v.c = backMark(47 - x, r) || 'b'; }
+// mouth, seen from the side: from each end of the front drawing's mouth, the line runs MOUTHBACK px further back along the head's
+// outer surface, curving upward more steeply toward its end, so the smile reads in profile.
+const MOUTHBACK = +(process.argv[11] || 3), RISE = [0, 1, 2];   // rows the line has risen at each px back: flat, then steeper, so it curves
+{ const s = -1, xc = 14; let yc = null; for (let y = 23; y >= -24; y--) { const v = vox.get(key(xc, y, 23)); if (v && v.part === 'head') { yc = y; break; } }
+  const paint = (x, y, r) => { for (const xx of [x, 47 - x]) { const v = vox.get(key(xx, y, r)); if (v && v.part === 'head') v.c = 'o'; } };   // both sides get the mirror-image voxels
+  // walk back along the surface one px at a time; stop if the surface jumps sideways (where the snout meets the cheek), so the line stays joined from every angle
+  let px = xc; if (yc !== null) for (let i = 1; i <= MOUTHBACK; i++) { const y = yc - i, r = 23 - RISE[Math.min(i, RISE.length) - 1]; let hit = null;
+    for (let x = 0; x < 23.5; x++) { const v = vox.get(key(x, y, r)); if (v && v.part === 'head') { hit = x; break; } }
+    if (hit === null || Math.abs(hit - px) > 1) break; paint(hit, y, r); paint(hit + 1, y, r); px = hit; } }
 // normals from the shape, so the light stays put while she turns
 for (const [k, v] of vox) { const r = k % 64, y = Math.floor(k / 64) % 64 - 24, x = Math.floor(k / 4096); const n = [0, 0, 0];
   for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) for (let c = -3; c <= 3; c++) if (!has(x + a, y + b, r + c)) { n[0] += a; n[1] += b; n[2] -= c; }
