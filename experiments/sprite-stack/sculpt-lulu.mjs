@@ -37,7 +37,7 @@ for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx
 }
 // snout: a broad rounded muzzle on the lower front of the head, carrying the mouth
 // two overlapping rounds: a bridge that carries the forehead slope forward, and the snout tip
-const SNOUT = (process.argv[5] || '23.5,9,19.5,12,7,5.5;23.5,11.5,21.5,10,6.8,4.3').split(';').map(s => s.split(',').map(Number));
+const SNOUT = (process.argv[5] || '23.5,11,22.5,11,6.5,4.2').split(';').map(s => s.split(',').map(Number));
 for (const SN of SNOUT) for (let x = 0; x < N; x++) for (let y = 0; y <= 23; y++) for (let r = 9; r <= 28; r++) if (((x - SN[0]) / SN[3]) ** 2 + ((y - SN[1]) / SN[4]) ** 2 + ((r - SN[2]) / SN[5]) ** 2 <= 1) vox.set(key(x, y, r), { part: 'head' });
 // tail: straight out of the lower back, tapering, lifting slightly
 for (let y = -6; y >= -21; y--) { const t = (-6 - y) / 15, cr = 39.5 - 2.5 * t, hw = 3.4 * (1 - t) + 1, hh = 4.2 * (1 - t) + 1.2;
@@ -47,12 +47,13 @@ for (let r = 0; r < N; r++) for (let x = 0; x < N; x++) { const c = at(FR.g, x, 
   const out = Math.max(0, Math.abs(x - 23.5) - 12), yc = Math.round(0 - 0.55 * out);
   for (let y = yc - 1; y <= yc + 1; y++) if (!vox.has(key(x, y, r))) vox.set(key(x, y, r), { part: 'gill', c: c === 'p' ? 'g' : c === 'D' ? 'G' : c }); }
 // marks: eyes, mouth, freckles, dimples from the front drawing; freckles from the back drawing
-const frontMark = (x, r) => { const c = at(FR.g, x, r); if (c === 'e' || c === 'w') return c; if (c === 'o' && r >= 21 && r <= 26 && !edge(FR.g, x, r)) return 'o';
+const EYEUP = +(process.argv[6] || 2);
+const frontMark = (x, r, depth) => { const e = at(FR.g, x, r + EYEUP); if (e === 'e' || e === 'w') return depth <= 2 ? e : null; const c = at(FR.g, x, r); if (c === 'e' || c === 'w') return null; if (c === 'o' && r >= 21 && r <= 26 && !edge(FR.g, x, r)) return 'o';
   return null; };
 const backMark = () => null;   // freckles and dimples are left off until the shape is right
 for (const [k, v] of vox) { if (v.part === 'gill') continue; const r = k % 64, y = Math.floor(k / 64) % 64 - 24, x = Math.floor(k / 4096); v.c = 'b';
   if (v.part !== 'head') continue; const near = s => [1, 2, 3, 4, 5].some(d => !has(x, y + s * d, r));
-  if (y > 1 && near(1)) v.c = frontMark(x, r) || 'b'; else if (y < 1 && near(-1)) v.c = backMark(47 - x, r) || 'b'; }
+  const depth = [1, 2, 3, 4, 5].find(d => !has(x, y + d, r)); if (y > 1 && depth) v.c = frontMark(x, r, depth) || 'b'; else if (y < 1 && near(-1)) v.c = backMark(47 - x, r) || 'b'; }
 // normals from the shape, so the light stays put while she turns
 for (const [k, v] of vox) { const r = k % 64, y = Math.floor(k / 64) % 64 - 24, x = Math.floor(k / 4096); const n = [0, 0, 0];
   for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) for (let c = -3; c <= 3; c++) if (!has(x + a, y + b, r + c)) { n[0] += a; n[1] += b; n[2] -= c; }
