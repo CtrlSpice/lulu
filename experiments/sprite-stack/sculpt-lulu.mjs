@@ -33,7 +33,7 @@ for (let r = 0; r < N; r++) { const fx = spans(x => isSkin(FR.g, x, r)); if (!fx
     const sm = Math.min(1, (r - 29) / 9), db = 6 + 3.2 * sm * sm * (3 - 2 * sm), df = 8.5 + 4.8 * bump(r, 38, 5.5);
     section(r, Math.ceil(23.5 - half), Math.floor(23.5 + half), 0.5 - db, 1, 1 + df, 'body');
     armRows.push([r, a, b]);
-  } else for (const [a, b] of fx) section(r, a, b, -6, 1, 8, 'body');
+  } else for (const [a, b] of fx) section(r, a, b, -6, 1, 8, a < 23.5 ? 'legL' : 'legR');   // each leg is its own part so the split between them can be outlined
 }
 // snout: a broad rounded muzzle on the lower front of the head, carrying the mouth
 // arms: short tapered limbs from the shoulder, where head meets body, out and down to the hand, held a little forward of the body's side
@@ -76,6 +76,9 @@ const lit = (q, cs, sn) => { const nu = q.n[0] * cs - q.n[1] * sn, nv = q.n[0] *
   if (q.c === 'b') return i > 0.9 ? 'h' : i > 0.2 ? 'b' : 'm'; if (q.c === 'g') return i > 0.7 ? 'p' : 'g'; return q.c; };
 // eye-level render with outlines around the figure and between parts
 const CW = 64, CH = 56, cx = 31.5, base = 50;
+// how much nearer a neighbouring part must be before a line is drawn on the farther one. A leg shares no line with the body or the tail; the two legs share one with each other.
+const isLeg = p => p === 'legL' || p === 'legR';
+const gapFor = (far, near) => (isLeg(far) && isLeg(near)) ? 1.5 : (isLeg(far) || isLeg(near)) ? 99 : (far === 'body' && near === 'head') ? 2.5 : 1.5;
 const frame = th => { const g = Array.from({ length: CH }, () => Array(CW).fill('.')), D = Array.from({ length: CH }, () => Array(CW).fill(-99)), PT = Array.from({ length: CH }, () => Array(CW).fill(''));
   const cs = Math.cos(th), sn = Math.sin(th);
   for (let r = 0; r < N; r++) { const sy = base - (45 - r);
@@ -84,7 +87,7 @@ const frame = th => { const g = Array.from({ length: CH }, () => Array(CW).fill(
         g[sy][sx] = lit(q, cs, sn); D[sy][sx] = v; PT[sy][sx] = q.part; break; } } }
   const o = g.map(row => row.slice());
   for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { if (g[y][x] === '.') { if (n4.some(([a, b]) => g[y + b] && g[y + b][x + a] && g[y + b][x + a] !== '.')) o[y][x] = 'o'; }
-    else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + ((PT[y][x] === 'body' && PT[y + b][x + a] === 'head') ? 2.5 : 1.5))) o[y][x] = 'o'; }
+    else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + gapFor(PT[y][x], PT[y + b][x + a]))) o[y][x] = 'o'; }
   return o.map(row => row.join('')); };
 const n = +nAngles, frames = Array.from({ length: n }, (_, i) => frame(i * 2 * Math.PI / n));
 fs.writeFileSync(outTxt, FR.pal.join('\n') + '\n' + Array.from({ length: CH }, (_, y) => frames.map(f => f[y]).join('')).join('\n') + '\n');
