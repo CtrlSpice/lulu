@@ -69,13 +69,17 @@ for (const [k, v] of vox) { if (v.part === 'gill') continue; const r = k % 64, y
   const e = y > 1 && eyeAt(x, r); if (e && ([1, 2].some(d => !has(x, y + d, r)) || [1, 2, 3, 4].some(d => !has(x + (x < 23.5 ? -d : d), y, r)))) v.c = e; else if (y < 1 && near(-1)) v.c = backMark(47 - x, r) || 'b'; }
 // mouth, seen from the side: from each end of the front drawing's mouth, the line runs MOUTHBACK px further back along the head's
 // outer surface, curving upward more steeply toward its end, so the smile reads in profile.
+const DIMPLES = [[], []];
 const MOUTHBACK = +(process.argv[11] || 3), RISE = [0, 1, 2];   // rows the line has risen at each px back: flat, then steeper, so it curves
 { const s = -1, xc = 14; let yc = null; for (let y = 23; y >= -24; y--) { const v = vox.get(key(xc, y, 23)); if (v && v.part === 'head') { yc = y; break; } }
   const paint = (x, y, r) => { for (const xx of [x, 47 - x]) { const v = vox.get(key(xx, y, r)); if (v && v.part === 'head') v.c = 'o'; } };   // both sides get the mirror-image voxels
   // walk back along the surface one px at a time; stop if the surface jumps sideways (where the snout meets the cheek), so the line stays joined from every angle
   let px = xc; if (yc !== null) for (let i = 1; i <= MOUTHBACK; i++) { const y = yc - i, r = 23 - RISE[Math.min(i, RISE.length) - 1]; let hit = null;
     for (let x = 0; x < 23.5; x++) { const v = vox.get(key(x, y, r)); if (v && v.part === 'head') { hit = x; break; } }
-    if (hit === null || Math.abs(hit - px) > 1) break; paint(hit, y, r); paint(hit + 1, y, r); px = hit; } }
+    if (hit === null || Math.abs(hit - px) > 1) break; paint(hit, y, r); paint(hit + 1, y, r); px = hit; }
+  // dimples: a little moon of 4 cubes on each side of the head, 1 px clear of the end of the mouth, curving around it. They are kept as a list and drawn as one shape (see the render).
+  if (yc !== null) { const endRow = 23 - RISE[Math.min(MOUTHBACK, RISE.length) - 1], y0 = yc - MOUTHBACK - 2;
+    for (const [y, r] of [[y0, endRow + 2], [y0 - 1, endRow + 1], [y0 - 1, endRow], [y0, endRow - 1]]) for (let x = 0; x < 23.5; x++) { const v = vox.get(key(x, y, r)); if (v && v.part === 'head') { DIMPLES[0].push({ x, y, r }); DIMPLES[1].push({ x: 47 - x, y, r }); break; } } } }
 // normals from the shape, so the light stays put while she turns
 for (const [k, v] of vox) { const r = k % 64, y = Math.floor(k / 64) % 64 - 24, x = Math.floor(k / 4096); const n = [0, 0, 0];
   for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) for (let c = -3; c <= 3; c++) if (!has(x + a, y + b, r + c)) { n[0] += a; n[1] += b; n[2] -= c; }
@@ -94,6 +98,9 @@ const frame = th => { const g = Array.from({ length: CH }, () => Array(CW).fill(
     for (let sx = 0; sx < CW; sx++) { const u = sx - cx;
       for (let v = 34; v >= -34; v -= 0.5) { const x = Math.round(23.5 + u * cs + v * sn), y = Math.round(-u * sn + v * cs); const q = (x >= 0 && x < N && y >= -24 && y <= 23) && vox.get(key(x, y, r)); if (!q) continue;
         g[sy][sx] = lit(q, cs, sn); D[sy][sx] = v; PT[sy][sx] = q.part; break; } } }
+  // dimples: each one is a small fixed shape on the head. Its second cube picks the pixel; the other cubes sit at their rounded offset from it, so the shape stays joined and 1 px wide at every angle.
+  for (const dm of DIMPLES) { if (dm.length < 2) continue; const pu = c => (c.x - 23.5) * cs - c.y * sn, pv = c => (c.x - 23.5) * sn + c.y * cs, A = dm[1], ax = Math.round(pu(A) + cx);
+    for (const c of dm) { const sx = ax + Math.round(pu(c) - pu(A)), sy = base - (45 - c.r); if (PT[sy] && PT[sy][sx] === 'head' && D[sy][sx] <= pv(c) + 1.5 && 'hbm'.includes(g[sy][sx])) g[sy][sx] = 's'; } }
   const o = g.map(row => row.slice());
   for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { if (g[y][x] === '.') { if (n4.some(([a, b]) => g[y + b] && g[y + b][x + a] && g[y + b][x + a] !== '.')) o[y][x] = 'o'; }
     else if (n4.some(([a, b]) => PT[y + b] && PT[y + b][x + a] && PT[y + b][x + a] !== PT[y][x] && D[y + b][x + a] > D[y][x] + gapFor(PT[y][x], PT[y + b][x + a]))) o[y][x] = 'o'; }
