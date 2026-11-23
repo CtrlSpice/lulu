@@ -128,6 +128,16 @@ const gillThickness = (t) => 0.8 - 0.35 * sm(0.05, 0.7, t);
  *  are sized to fill that gap with only a few px to spare, so each frond's gill laps a little over its neighbour's
  *  instead of burying it. */
 const gillFringe = (t, rear) => (rear ? 20 : 16) * sm(0.05, 0.85, t) ** 1.2 * (1 - 0.45 * sm(0.8, 1, t));
+// ---- mouth: the wide smile of the pixel sprite (lulu-sprite.txt, seen from the front): the corners turn up, the line
+// dips under each eye and rises a little again in the middle. On the 3D head it runs along the jaw, a little below the
+// widest point of the head's side, from the snout tip back to the eyes, where an axolotl's mouth ends. Its height is a
+// fixed height above the ground, not a fraction of the head's thickness, so the raise in the middle keeps its size at
+// the blunt snout tip, where the head is thinnest. ----
+/** Height of the mouth line below the widest point of the head at the eyes, and how far it rises in the middle and at
+ *  the corners and falls under the eyes, both as fractions of the head's half height there. */
+export const MOUTH_DEPTH = -0.25, MOUTH_RISE = 0.15;
+/** Where the line is lowest, as a fraction of the way from the middle to a corner (the sprite: under each eye). */
+export const MOUTH_DIP_AT = 0.62;
 export const REST = { wave: 0, phase: 0 };
 const REST_SPINE = restSpine();
 const REST_ARC = (() => { const a = [0]; for (let i = 1; i < REST_SPINE.length; i++)
@@ -185,6 +195,8 @@ export function buildAxolotl(pose = REST) {
         }
     const je = stationAt(arc, eyeS), eyeOff = 0.53 * halfWidthCurve(eyeS) * L;
     const eyeZ = (() => { const zc = (top[je] + bottom[je]) / 2, hh = (top[je] - bottom[je]) / 2, u = eyeOff / HALF_PX[je]; return zc + hh * Math.max(0, 1 - u ** SECTION_EXPONENT) ** (1 / SECTION_EXPONENT); })();
+    const headMid = (top[je] + bottom[je]) / 2, headHalf = (top[je] - bottom[je]) / 2, cornerHeight = MOUTH_DEPTH + MOUTH_RISE;
+    const mouth = { cornerLat: HALF_PX[je] * (1 - Math.abs(cornerHeight) ** SECTION_EXPONENT) ** (1 / SECTION_EXPONENT), endS: eyeS, height: headMid + MOUTH_DEPTH * headHalf, rise: MOUTH_RISE * headHalf, dipAt: MOUTH_DIP_AT };
     const eyes = [-1, 1].map(side => [spine[je][0] + side * normal[je][0] * eyeOff, spine[je][1] + side * normal[je][1] * eyeOff, eyeZ]);
     // legs
     const legs = [];
@@ -239,5 +251,5 @@ export function buildAxolotl(pose = REST) {
             const run = [(ex * back[0] + ey * back[1]) * per, (ex * out[0] + ey * out[1]) * per, spec.width];
             gills.push({ name: `${spec.name} ${side === 1 ? 'left' : 'right'}`, side, root, run, points, along, across, halfWidth, halfThick, fringeRear, fringeFront });
         }
-    return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: EYE_RADIUS, legs, gills, ground };
+    return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: EYE_RADIUS, mouth, legs, gills, ground };
 }

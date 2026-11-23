@@ -20,7 +20,7 @@ layout(location = 1) in vec4 aData; // s, u, v, part
 layout(location = 2) in float aLat;
 uniform vec2 uCentre, uSize;
 uniform float uSpin, uTilt, uZoom;
-out vec4 vData; out float vLat; out float vDepth;
+out vec4 vData; out float vLat; out float vDepth; out float vHeight;
 void main() {
   // spin about the vertical axis through the picture's centre, then tilt the view from straight above (0) to the side
   vec3 p = aPos - vec3(uCentre, 0.0);
@@ -28,17 +28,17 @@ void main() {
   vec2 screen = uCentre + vec2(r.x, r.y * cos(uTilt) - p.z * sin(uTilt)) * uZoom;
   float depth = r.y * sin(uTilt) + p.z * cos(uTilt); // larger = nearer to us
   gl_Position = vec4(screen.x / uSize.x * 2.0 - 1.0, 1.0 - screen.y / uSize.y * 2.0, -depth / 1500.0, 1.0);
-  vData = aData; vLat = aLat; vDepth = depth;
+  vData = aData; vLat = aLat; vDepth = depth; vHeight = aPos.z;
 }`;
 export const GEOMETRY_FS = HEAD + `
-in vec4 vData; in float vLat; in float vDepth;
+in vec4 vData; in float vLat; in float vDepth; in float vHeight;
 layout(location = 0) out vec4 where0; // s, u, v, part
-layout(location = 1) out vec4 where1; // lat, depth, rate
+layout(location = 1) out vec4 where1; // lat, depth, rate, height above the body's axis (px)
 void main() {
   int part = int(vData.w + 0.5);
   // fin: how fast "height up the fin" changes from one pixel to the next (its inverse is the fin's height on screen)
   float rate = part == 2 ? fwidth(vData.z) : 0.0;
-  where0 = vData; where1 = vec4(vLat, vDepth, rate, 1.0);
+  where0 = vData; where1 = vec4(vLat, vDepth, rate, vHeight);
 }`;
 /** One big triangle covering the screen. */
 export const SCREEN_VS = HEAD + `
@@ -47,6 +47,8 @@ export const PAINT_FS = HEAD + NOISE + `
 uniform sampler2D uWhere0, uWhere1;
 uniform float uTime, uFlow, uLength;
 uniform vec4 uGillRoot[6]; // where on the body each gill frond grows from: along, across, up, px across
+uniform vec4 uMouth;      // mouth: px from the midline to each corner, height (px), rise (px), where the dips are (see Mouth in model.ts)
+uniform float uMouthEnd;  // how far along the body the mouth corners are
 uniform vec4 uGillRun[6];  // how each frond runs over the body near its base: px towards the tail and px outward per frond length, blade half width in px
 out vec4 paint; // r = pink body ink, g = wine ink, b = 1 on an eye, a = 1 where there is animal
 float backStrength(float s) { return 0.2 + 0.8 * smoothstep(0.03, 0.12, s) * (1.0 - 0.5 * smoothstep(0.55, 0.85, s)) - 0.3 * smoothstep(0.88, 1.0, s); }
@@ -82,6 +84,36 @@ vec2 skin(float s, float across, float c, vec2 Pf, float creases) {
   float grooves = crease * step(-0.5, groove) * step(groove, GROOVES - 0.5) * smoothstep(0.64, 0.74, c) * (1.0 - smoothstep(1.35, 1.75, c)) * (1.0 - 0.7 * fromMiddle * fromMiddle);
   return vec2(base, mid + dark + stains + 0.17 * grooves * creases);
 }
+// how far a point of skin lies above the mouth line, in px (0 on the line)
+float mouthOffset(float z, float lat) {
+  float q = abs(lat) / uMouth.x, d = uMouth.w;
+  float shape = q < d ? cos(3.14159265 * q / d) : -cos(3.14159265 * min(1.0, (q - d) / (1.0 - d)));
+  return z - (uMouth.y + uMouth.z * shape);
+}
+// 1 on the mouth line, fading to 0 about 1.6 px from it, at any angle: the distance in px is the offset divided by how
+// fast the offset changes from one pixel to the next (read from the neighbouring pixels that are also skin)
+float mouthLine(ivec2 px, float s, float z, float lat) {
+  if (s > uMouthEnd + 0.02) return 0.0;
+  float f = mouthOffset(z, lat);
+  if (abs(f) > 30.0) return 0.0;
+  ivec2 size = textureSize(uWhere0, 0);
+  vec2 g = vec2(0.0);
+  for (int axis = 0; axis < 2; axis++) {
+    ivec2 step_ = axis == 0 ? ivec2(1, 0) : ivec2(0, 1);
+    vec4 a0 = texelFetch(uWhere0, clamp(px + step_, ivec2(0), size - 1), 0), b0 = texelFetch(uWhere0, clamp(px - step_, ivec2(0), size - 1), 0);
+    bool aSkin = int(a0.w + 0.5) == 1, bSkin = int(b0.w + 0.5) == 1;
+    vec4 a1 = texelFetch(uWhere1, clamp(px + step_, ivec2(0), size - 1), 0), b1 = texelFetch(uWhere1, clamp(px - step_, ivec2(0), size - 1), 0);
+    float fa = aSkin ? mouthOffset(a1.w, a1.x) : f;
+    float fb = bSkin ? mouthOffset(b1.w, b1.x) : f;
+    g[axis] = (aSkin && bSkin) ? (fa - fb) * 0.5 : fa - fb;
+  }
+  float dist = abs(f) / max(length(g), 1e-5);
+  float corner = smoothstep(-1.0, 1.5, uMouth.x - abs(lat)); // the line ends softly at each corner
+  // where the skin turns edge-on (its height changes by several px per screen px) the line fades, so the mouth does
+  // not show as marks along her outline, for example from straight above
+  float facing = 1.0 - smoothstep(3.0, 6.0, length(g));
+  return (1.0 - smoothstep(0.6, 1.6, dist)) * corner * facing;
+}
 void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
   vec4 w0 = texelFetch(uWhere0, px, 0), w1 = texelFetch(uWhere1, px, 0);
@@ -91,6 +123,7 @@ void main() {
   if (part == 1 || part == 4) {
     // body, and the eyes (the skin's paint continues under an eye; the bead itself is added on the paper)
     paint = vec4(skin(s, u, v >= 0.0 ? abs(u) : 2.0 - abs(u), flowed(vec2(s * uLength, lat)), 1.0), part == 4 ? 1.0 : 0.0, 1.0);
+    if (part == 1) paint.g += 1.1 * mouthLine(px, s, w1.w, lat); // the mouth: a fine wine line that stays put on her skin
   } else if (part == 2) {
     // fin: body-coloured and fleshy where it joins the body, thinning to a pale see-through membrane with a fine dark
     // line along its free edge

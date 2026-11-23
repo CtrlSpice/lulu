@@ -128,6 +128,8 @@ async function start(): Promise<void> {
     bind(0, where.textures[0], paint, 'uWhere0'); bind(1, where.textures[1], paint, 'uWhere1');
     gl.uniform1f(uni(paint, 'uTime'), clock * settings.flowSpeed); gl.uniform1f(uni(paint, 'uFlow'), settings.flow); gl.uniform1f(uni(paint, 'uLength'), axolotl.L);
     gl.uniform4fv(uni(paint, 'uGillRoot'), new Float32Array(axolotl.gills.flatMap(g => [...g.root])));
+    const m = axolotl.mouth;
+    gl.uniform4f(uni(paint, 'uMouth'), m.cornerLat, m.height, m.rise, m.dipAt); gl.uniform1f(uni(paint, 'uMouthEnd'), m.endS);
     gl.uniform4fv(uni(paint, 'uGillRun'), new Float32Array(axolotl.gills.flatMap(g => [...g.run, 0])));
     screenPass(painted.fbo);
     // 3. the paint spreads: a tight blur and a wide one
