@@ -177,7 +177,7 @@ export interface Gill {
 
 // ---- mouth: the wide smile of the pixel sprite (lulu-sprite.txt, seen from the front): the corners turn up, the line
 // dips under each eye and rises a little again in the middle. On the 3D head it runs along the jaw, a little below the
-// widest point of the head's side, from the snout tip back to the eyes, where an axolotl's mouth ends. Its height is a
+// widest point of the head's side, from the snout tip back to just behind the eyes. Its height is a
 // fixed height above the ground, not a fraction of the head's thickness, so the raise in the middle keeps its size at
 // the blunt snout tip, where the head is thinnest. ----
 /** Height of the mouth line below the widest point of the head at the eyes, and how far it rises in the middle and at
@@ -185,6 +185,9 @@ export interface Gill {
 export const MOUTH_DEPTH = -0.25, MOUTH_RISE = 0.15;
 /** Where the line is lowest, as a fraction of the way from the middle to a corner (the sprite: under each eye). */
 export const MOUTH_DIP_AT = 0.62;
+/** How far back the corners are, as a multiple of the distance from the snout tip to the eyes. Measured in side views:
+ *  1.1 (three-quarter photo) and 1.4 (19th-century engraving), so the corners sit just behind the eyes. */
+export const MOUTH_LENGTH = 1.2;
 export interface Mouth {
   /** Distance from the midline to each corner (px), and how far along the body the corners are (fraction of L). */
   readonly cornerLat: number; readonly endS: number;
@@ -278,7 +281,8 @@ export function buildAxolotl(pose: Pose = REST): Axolotl {
   const je = stationAt(arc, eyeS), eyeOff = 0.53 * halfWidthCurve(eyeS) * L;
   const eyeZ = (() => { const zc = (top[je] + bottom[je]) / 2, hh = (top[je] - bottom[je]) / 2, u = eyeOff / HALF_PX[je]; return zc + hh * Math.max(0, 1 - u ** SECTION_EXPONENT) ** (1 / SECTION_EXPONENT); })();
   const headMid = (top[je] + bottom[je]) / 2, headHalf = (top[je] - bottom[je]) / 2, cornerHeight = MOUTH_DEPTH + MOUTH_RISE;
-  const mouth: Mouth = { cornerLat: HALF_PX[je] * (1 - Math.abs(cornerHeight) ** SECTION_EXPONENT) ** (1 / SECTION_EXPONENT), endS: eyeS, height: headMid + MOUTH_DEPTH * headHalf, rise: MOUTH_RISE * headHalf, dipAt: MOUTH_DIP_AT };
+  const mouthEnd = MOUTH_LENGTH * eyeS, jc = stationAt(arc, mouthEnd);
+  const mouth: Mouth = { cornerLat: HALF_PX[jc] * (1 - Math.abs(cornerHeight) ** SECTION_EXPONENT) ** (1 / SECTION_EXPONENT), endS: mouthEnd, height: headMid + MOUTH_DEPTH * headHalf, rise: MOUTH_RISE * headHalf, dipAt: MOUTH_DIP_AT };
   const eyes = [-1, 1].map(side => [spine[je][0] + side * normal[je][0] * eyeOff, spine[je][1] + side * normal[je][1] * eyeOff, eyeZ] as Vec3) as [Vec3, Vec3];
 
   // legs
