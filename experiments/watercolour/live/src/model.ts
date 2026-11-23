@@ -195,6 +195,18 @@ export interface Mouth {
   readonly height: number; readonly rise: number; readonly dipAt: number;
 }
 
+// ---- nostrils: two small dots on the front of the snout, just above the lip. Measured in a front-view photo
+// (refs many/12): they are 0.53 of the eye spacing apart, and 0.67 of the way down from the eyes to the mouth (the
+// side-view engraving, many/17, gives 0.57; this uses 0.6). Each sits where the snout's skin reaches that height. ----
+export const NOSTRIL_SPACING = 0.53, NOSTRIL_DROP = 0.6;
+/** Radius of each nostril dot (px). */
+export const NOSTRIL_RADIUS = 2.6;
+export interface Nostrils {
+  /** Position of the right nostril in the body's own measures (px): along the body from the snout tip, out from the
+   *  midline, and height. The left one is its mirror image. */
+  readonly along: number; readonly lat: number; readonly height: number; readonly radius: number;
+}
+
 export interface Leg { readonly name: string; readonly root: Vec3; readonly joint: Vec3; readonly end: Vec3; readonly tips: readonly Vec3[]; readonly radius: number; }
 
 /** How the body is bent away from its rest pose. */
@@ -224,6 +236,7 @@ export interface Axolotl {
   readonly eyes: readonly [Vec3, Vec3];
   readonly eyeRadius: number;
   readonly mouth: Mouth;
+  readonly nostrils: Nostrils;
   readonly legs: readonly Leg[];
   /** Six gills: upper, middle and lower on each side. */
   readonly gills: readonly Gill[];
@@ -283,6 +296,16 @@ export function buildAxolotl(pose: Pose = REST): Axolotl {
   const headMid = (top[je] + bottom[je]) / 2, headHalf = (top[je] - bottom[je]) / 2, cornerHeight = MOUTH_DEPTH + MOUTH_RISE;
   const mouthEnd = MOUTH_LENGTH * eyeS, jc = stationAt(arc, mouthEnd);
   const mouth: Mouth = { cornerLat: HALF_PX[jc] * (1 - Math.abs(cornerHeight) ** SECTION_EXPONENT) ** (1 / SECTION_EXPONENT), endS: mouthEnd, height: headMid + MOUTH_DEPTH * headHalf, rise: MOUTH_RISE * headHalf, dipAt: MOUTH_DIP_AT };
+  // nostrils: at their spacing across, find the first station back from the snout tip where the top of the snout reaches
+  // their height
+  const nostrilLat = NOSTRIL_SPACING * eyeOff, nostrilZ = eyeZ - NOSTRIL_DROP * (eyeZ - (mouth.height + mouth.rise));
+  let jn = 0;
+  for (let i = 0; i < je; i++) {
+    if (HALF_PX[i] <= nostrilLat) continue;
+    const zc = (top[i] + bottom[i]) / 2, hh = (top[i] - bottom[i]) / 2, up = zc + hh * (1 - (nostrilLat / HALF_PX[i]) ** SECTION_EXPONENT) ** (1 / SECTION_EXPONENT);
+    if (up >= nostrilZ) { jn = i; break; }
+  }
+  const nostrils: Nostrils = { along: arc[jn], lat: nostrilLat, height: nostrilZ, radius: NOSTRIL_RADIUS };
   const eyes = [-1, 1].map(side => [spine[je][0] + side * normal[je][0] * eyeOff, spine[je][1] + side * normal[je][1] * eyeOff, eyeZ] as Vec3) as [Vec3, Vec3];
 
   // legs
@@ -333,5 +356,5 @@ export function buildAxolotl(pose: Pose = REST): Axolotl {
     gills.push({ name: `${spec.name} ${side === 1 ? 'left' : 'right'}`, side, root, run, points, along, across, halfWidth, halfThick, fringeRear, fringeFront });
   }
 
-  return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: EYE_RADIUS, mouth, legs, gills, ground };
+  return { L, spine, arc, tangent, normal, halfWidth: HALF_PX, top, bottom, finTop, finBottom, eyes, eyeRadius: EYE_RADIUS, mouth, nostrils, legs, gills, ground };
 }

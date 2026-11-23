@@ -49,6 +49,7 @@ uniform float uTime, uFlow, uLength;
 uniform vec4 uGillRoot[6]; // where on the body each gill frond grows from: along, across, up, px across
 uniform vec4 uMouth;      // mouth: px from the midline to each corner, height (px), rise (px), where the dips are (see Mouth in model.ts)
 uniform float uMouthEnd;  // how far along the body the mouth corners are
+uniform vec4 uNostril;    // right nostril: px along the body, px out from the midline, height (px), radius (px)
 uniform vec4 uGillRun[6];  // how each frond runs over the body near its base: px towards the tail and px outward per frond length, blade half width in px
 out vec4 paint; // r = pink body ink, g = wine ink, b = 1 on an eye, a = 1 where there is animal
 float backStrength(float s) { return 0.2 + 0.8 * smoothstep(0.03, 0.12, s) * (1.0 - 0.5 * smoothstep(0.55, 0.85, s)) - 0.3 * smoothstep(0.88, 1.0, s); }
@@ -114,6 +115,25 @@ float mouthLine(ivec2 px, float s, float z, float lat) {
   float facing = 1.0 - smoothstep(3.0, 6.0, length(g));
   return (1.0 - smoothstep(0.6, 1.6, dist)) * corner * facing;
 }
+// how fast the skin's height changes from one pixel to the next; large where the skin is seen edge-on
+float heightSlope(ivec2 px, float z) {
+  ivec2 size = textureSize(uWhere0, 0);
+  vec2 g = vec2(0.0);
+  for (int axis = 0; axis < 2; axis++) {
+    ivec2 step_ = axis == 0 ? ivec2(1, 0) : ivec2(0, 1), a = clamp(px + step_, ivec2(0), size - 1), b = clamp(px - step_, ivec2(0), size - 1);
+    bool aSkin = int(texelFetch(uWhere0, a, 0).w + 0.5) == 1, bSkin = int(texelFetch(uWhere0, b, 0).w + 0.5) == 1;
+    float za = aSkin ? texelFetch(uWhere1, a, 0).w : z, zb = bSkin ? texelFetch(uWhere1, b, 0).w : z;
+    g[axis] = (aSkin && bSkin) ? (za - zb) * 0.5 : za - zb;
+  }
+  return length(g);
+}
+// 1 inside a nostril, 0 outside: a small round dot on her skin, measured in the body's own px, faded where the skin is
+// seen edge-on
+float nostrilDot(ivec2 px, float s, float lat, float z) {
+  float dist = length(vec3(s * uLength - uNostril.x, abs(lat) - uNostril.y, z - uNostril.z));
+  if (dist > uNostril.w + 2.0) return 0.0;
+  return (1.0 - smoothstep(uNostril.w - 0.8, uNostril.w + 0.6, dist)) * (1.0 - smoothstep(3.0, 6.0, heightSlope(px, z)));
+}
 void main() {
   ivec2 px = ivec2(gl_FragCoord.xy);
   vec4 w0 = texelFetch(uWhere0, px, 0), w1 = texelFetch(uWhere1, px, 0);
@@ -123,7 +143,7 @@ void main() {
   if (part == 1 || part == 4) {
     // body, and the eyes (the skin's paint continues under an eye; the bead itself is added on the paper)
     paint = vec4(skin(s, u, v >= 0.0 ? abs(u) : 2.0 - abs(u), flowed(vec2(s * uLength, lat)), 1.0), part == 4 ? 1.0 : 0.0, 1.0);
-    if (part == 1) paint.g += 1.1 * mouthLine(px, s, w1.w, lat); // the mouth: a fine wine line that stays put on her skin
+    if (part == 1) paint.g += 1.1 * mouthLine(px, s, w1.w, lat) + 1.4 * nostrilDot(px, s, lat, w1.w); // the mouth and nostrils: fine wine marks that stay put on her skin
   } else if (part == 2) {
     // fin: body-coloured and fleshy where it joins the body, thinning to a pale see-through membrane with a fine dark
     // line along its free edge

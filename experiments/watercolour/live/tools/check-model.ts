@@ -37,5 +37,10 @@ const mirrored = a.gills.slice(0, 3).map((g, i) => { const o = a.gills[i + 3]; r
 check('gill fronds: largest difference between the left and right of a pair', Math.max(...mirrored), 0.001);
 check('gill fronds growing from somewhere other than the back corner of the head', a.gills.filter(g => g.root[0] < 0.15 || g.root[0] > 0.2).length, 0);
 check('gill fronds whose skin does not start on the body surface', a.gills.filter(g => Math.abs(Math.abs(g.root[1]) ** 2.3 + g.root[2] ** 2.3 - 1) > 1e-6).length, 0);
+// nostrils: closer together than the eyes, ahead of them, and between the eyes and the mouth in height
+const eyeLat = Math.hypot(a.eyes[0][0] - a.eyes[1][0], a.eyes[0][1] - a.eyes[1][1]) / 2, eyeAlong = a.arc[a.spine.findIndex(p => Math.hypot(p[0] - (a.eyes[0][0] + a.eyes[1][0]) / 2, p[1] - (a.eyes[0][1] + a.eyes[1][1]) / 2) < 2)];
+check('nostrils further apart than the eyes by', Math.max(0, a.nostrils.lat - eyeLat), 0);
+check('nostrils further back than the eyes by', Math.max(0, a.nostrils.along - eyeAlong), 0);
+check('nostrils outside the height between mouth and eyes by', Math.max(0, a.nostrils.height - a.eyes[0][2], a.mouth.height - a.nostrils.height), 0);
 console.log(fails ? `${fails} FAILED` : 'all passed: the model seen from above is the still picture');
 process.exit(fails ? 1 : 0);

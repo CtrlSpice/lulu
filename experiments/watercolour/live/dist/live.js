@@ -156,6 +156,8 @@ async function start() {
         const m = axolotl.mouth;
         gl.uniform4f(uni(paint, 'uMouth'), m.cornerLat, m.height, m.rise, m.dipAt);
         gl.uniform1f(uni(paint, 'uMouthEnd'), m.endS);
+        const n = axolotl.nostrils;
+        gl.uniform4f(uni(paint, 'uNostril'), n.along, n.lat, n.height, n.radius);
         gl.uniform4fv(uni(paint, 'uGillRun'), new Float32Array(axolotl.gills.flatMap(g => [...g.run, 0])));
         screenPass(painted.fbo);
         // 3. the paint spreads: a tight blur and a wide one
