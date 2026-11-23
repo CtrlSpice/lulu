@@ -195,10 +195,11 @@ export interface Mouth {
   readonly height: number; readonly rise: number; readonly dipAt: number;
 }
 
-// ---- nostrils: two small dots on the front of the snout, just above the lip. Measured in a front-view photo
-// (refs many/12): they are 0.53 of the eye spacing apart, and 0.67 of the way down from the eyes to the mouth (the
-// side-view engraving, many/17, gives 0.57; this uses 0.6). Each sits where the snout's skin reaches that height. ----
-export const NOSTRIL_SPACING = 0.53, NOSTRIL_DROP = 0.6;
+// ---- nostrils: two small dots on the front of the snout, just above the lip. Spacing: 0.3 of the eye spacing, as in a
+// head sketch seen from the front (refs many/14; a front-view photo, many/12, suggests about 0.53, but one of its
+// nostrils is too faint to measure well). Height: 0.6 of the way down from the eyes to the mouth (0.67 in the photo,
+// 0.57 in the side-view engraving, many/17). Each sits where the snout's skin reaches that height. ----
+export const NOSTRIL_SPACING = 0.3, NOSTRIL_DROP = 0.6;
 /** Radius of each nostril dot (px). */
 export const NOSTRIL_RADIUS = 2.6;
 export interface Nostrils {
